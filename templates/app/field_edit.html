@@ -1,0 +1,534 @@
+{% extends "app/base.html" %} {% block title %} Edit Field {% endblock %}
+{% block content %}
+{% load filters %}
+
+<div class="container-fluid d-flex" id="edit-field">
+    <div class="container" style="width: 100%; max-width: 40rem; margin:0;">
+        <!-- Field Name -->
+        {% include "components/button_collapse.html" with title="Name" base_id="field-name" %}
+        <form class="collapse form-inline mt-2" id="collapse-field-name" method="POST" action="{% url 'core:field_edit_name' %}">
+            {% csrf_token %}
+            <div class="w-100 d-flex">
+                <input type="hidden" name="original" value="{{ field_name }}">
+                <input class="form-control me-1 mb-2" type="text" id="input-field-name" name="new" onkeydown="return /[0-9a-zA-Z_]/i.test(event.key)" value="{{ field_name }}">
+                <button id="check-field-name" type="submit" class="btn btn-outline-success ms-1 mb-2">{% include "icons/check2.html" %}</button>
+            </div>
+        </form> 
+
+        <!-- Traject -->
+        {% include "components/button_collapse.html" with title="Traject" base_id="traject" %}
+        <form class="collapse form-inline mt-2" id="collapse-traject" method="POST" action="{% url 'core:field_edit_traject' %}">
+            {% csrf_token %}
+            {% include "components/container_field_edit.html" with base_id="traject" %}
+        </form> 
+
+        <!-- Geofence -->
+        {% include "components/button_collapse.html" with title="Geofence" base_id="geofence" %}
+        <form class="collapse form-inline mt-2" id="collapse-geofence" method="POST" action="{% url 'core:field_edit_geofence' %}">
+            {% csrf_token %}
+            {% include "components/container_field_edit.html" with base_id="geofence" %}
+        </form> 
+
+        <!-- Tasks -->
+        <div id="tasks-container">
+        {% for task in task_geometries %}
+            {% include "components/container_task_edit.html" with task=task implement_choices=implement_choices type_choices=type_choices hitch_choices=hitch_choices %}
+        {% endfor %}
+        </div>
+
+        <div class="row mb-2">
+            <div class="d-flex justify-content-end">
+                <form method="GET" action="{% url 'core:delete_new_field' %}" id="cancel-field">
+                    <button class="btn btn-outline-danger ms-1 mt-2 me-1">Cancel</button>
+                </form>
+                <form method="GET" action="{% url 'core:field_edit_task_add' %}" id="add-task-form" >
+                    <input type="hidden" name="field_name" value="{{ field_name }}">
+                    <button class="btn btn-outline-primary ms-1 mt-2 me-1" type="submit">Add Task</button>
+                </form>
+                <form method="GET" action="{% url 'core:field' %}">
+                    <button class="btn btn-outline-success ms-1 mt-2">Done</button>
+                </form>
+            </div>
+        </div>  
+    </div>
+
+    <div id="map-container" style="width: 100%; height: calc(100vh - 5em); min-width: 20rem; flex: 1; max-width: 100%; position:relative;"></div>
+</div>
+
+<style>
+    #edit-field {
+        flex-wrap: wrap;
+        justify-content: center;
+        
+    }
+    @media screen and (min-width: 1008px) {
+        justify-content: flex-start;
+    }
+</style>
+
+<script>
+    var robotLocation;
+    var executedRobotZoom = false;
+
+    // Creating map options
+    var mapOptions = {
+        center: [50.98203689815162, 3.7785538265089014],
+        zoom: 16
+    }
+
+    function calculateAverageCoordinate(coordinates) {
+        let sumLat = 0;
+        let sumLng = 0;
+
+        coordinates.forEach(coord => {
+            sumLat += coord[0]; 
+            sumLng += coord[1]; 
+        });
+
+        const avgLat = sumLat / coordinates.length;
+        const avgLng = sumLng / coordinates.length;
+
+        return [avgLat, avgLng];
+    }
+
+    function isLegitimateCoordinate(coordinate) {
+        const lat = coordinate[0];
+        const lng = coordinate[1];
+
+        if (lat === 0 || lng === 0) {
+            return false; // Invalid coordinate
+        }
+
+        if (lat < -90 || lat > 90) {
+            return false; // Invalid latitude
+        }
+
+        if (lng < -180 || lng > 180) {
+            return false; // Invalid longitude
+        }
+
+        // Check if the coordinate falls within the bounding box of Europe
+        const europeBounds = {
+            minLat: 35, // Minimum latitude for Europe
+            maxLat: 72, // Maximum latitude for Europe
+            minLng: -35, // Minimum longitude for Europe
+            maxLng: 45 // Maximum longitude for Europe
+        };
+
+        if (lat < europeBounds.minLat || lat > europeBounds.maxLat ||
+            lng < europeBounds.minLng || lng > europeBounds.maxLng) {
+            return false; // Coordinate is not in Europe
+        }
+
+        return true;
+    }
+
+    function getMapOptions() {
+        if (sessionStorage.getItem('center')) {
+            try {
+                let sessionCenter = JSON.parse(sessionStorage.getItem('center'));
+                mapOptions.center = [sessionCenter.lat, sessionCenter.lng];
+            } catch(error) {
+                sessionStorage.clear();
+                console.error("center has an invalid format. Using default.");
+            }
+        }
+        if (sessionStorage.getItem('zoom')) {
+            try {
+                mapOptions.zoom = parseInt(sessionStorage.getItem('zoom'));      
+            } catch(error) {
+                sessionStorage.clear();
+                console.error("zoom has an invalid format. Using default.");
+            }
+        }
+        return mapOptions;
+    }
+
+    // Creating a map object
+    var map = new L.map('map-container', mapOptions);
+
+    map.keyboard.disable();
+    map.on('zoomend', onMapChange);
+    map.on('moveend', onMapChange);
+
+    // Helper functions
+    function updateLayerGroup(data, name) {
+        // check if data is valid
+        if (data.empty) {
+            return;
+
+        }
+
+        // Determine color
+        let color = 'blue';
+        if (name === 'geofence' || name === 'traject') {
+            color = 'red';
+        }
+
+        // update layers
+        layerGroups[name].clearLayers();
+        if (name === 'traject') {
+            let traject = L.polyline(data.latlng[0], {
+                color: color,
+                weight: 2
+            }).addTo(layerGroups[name]);
+            L.polylineDecorator(traject, {
+                patterns: [{offset: 25, repeat: 50, symbol: L.Symbol.arrowHead({pixelSize: 5, polygon: true, pathOptions: {color: 'red', fillOpacity: 0, weight: 2}})}]
+            }).addTo(layerGroups[name]);
+        } else if (name === 'geofence') {
+            L.polygon(data.latlng[0], {
+                color: color,
+                fill: false
+            }).addTo(layerGroups[name]);
+        } else {
+            // Task
+            let taskType = fieldData.tasks[name].type;
+            if (['cardan', 'continuous', 'hitch'].includes(taskType)) {
+                for (let i = 0; i < data.latlng.length; i++) {
+                    L.polygon(data.latlng[i], {
+                        color: color,
+                        fill: false,
+                    }).addTo(layerGroups[name]);
+                }
+            } else if (['discrete', 'intermittent'].includes(taskType)) {
+                for (let i = 0; i < data.latlng.length; i++) {
+                    L.circleMarker(data.latlng[i], {
+                        color: color, 
+                        weight: 2, 
+                        fillOpacity: 0.2,
+                        radius: 3
+                    }).addTo(layerGroups[name]);
+                }
+            }
+        } 
+
+        // update field data
+        if (name === 'traject' || name === 'geofence') {
+            fieldData[name] = data;
+            if (!executedRobotZoom) {
+                averageCoordinate = calculateAverageCoordinate(data.latlng[0])
+                map.setView(averageCoordinate, 18)
+                executedRobotZoom = true;
+            }
+        } else {
+            fieldData.tasks[name].geometry = data;
+        }
+    }
+
+    // Function to get all drawn features
+    function getAllDrawnFeatures() {
+        var drawnFeatures = [];
+
+        // Iterate through each layer in the feature group
+        var layers = drawnItems.getLayers();
+        for (let i = 0; i < layers.length; i++) {
+            let latLngs = layers[i].getLatLngs();
+            // If the layer is an array of arrays, get the first array, get down to the lowest array
+            while (Array.isArray(latLngs[0])) {
+                latLngs = latLngs[0];
+            }
+            let latLngsArray = [];
+            for (let j = 0; j < latLngs.length; j++) {
+                latLngsArray.push([latLngs[j].lat, latLngs[j].lng]);
+            }
+            drawnFeatures.push(latLngsArray);
+        }
+
+        return drawnFeatures;
+    }
+
+    function clearDrawnFeatures() {
+        drawnItems.clearLayers();
+    }
+
+    function removeDrawnLayer(layer) {
+        drawnItems.removeLayer(layer);
+    }
+
+    function removeDrawnLayers(layers) {
+        for (let i = 0; i < layers.length; i++) {
+            drawnItems.removeLayer(layers[i]);
+        }
+    }
+
+    // Aditional variables
+    var additionalPixelOffset = 30;
+    var accpetedCollapse = new Set();
+    var editableShape = {
+        'name': '',
+        'type': '',
+        'data': [],
+    };
+
+    function onMapChange(e) {
+        let zoom = map.getZoom();
+        let center = map.getCenter();
+        sessionStorage.setItem('center', JSON.stringify(center));
+        sessionStorage.setItem('zoom', map.getZoom());
+    }
+
+    var layer = L.tileLayer('http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{
+        maxZoom: 25,
+        subdomains:['mt0','mt1','mt2','mt3']
+    });
+    map.addLayer(layer);
+
+    // Draw robot
+    var robotGroup = L.layerGroup().addTo(map);
+    var driveInGroup = L.layerGroup().addTo(map);
+    var overlayGroup = L.layerGroup().addTo(map);
+    var highlightGroup = L.layerGroup().addTo(map); 
+    var overlayGroup = L.layerGroup().addTo(map);
+
+    var fieldData = JSON.parse('{{ field_json | safe }}');
+    var layerGroups = {
+        'traject': L.layerGroup().addTo(map),
+        'geofence': L.layerGroup().addTo(map),
+        {% for task in task_geometries %}
+            '{{ task.name }}': L.layerGroup().addTo(map),
+        {% endfor %}
+    }
+
+    function isCoordinateVisible(latitude, longitude) {
+        let mapSize = map.getSize();
+        let frac = 0.25;
+
+        var mapBounds = L.latLngBounds(
+            map.containerPointToLatLng([mapSize.x * frac, mapSize.y * frac]),  // top-left corner
+            map.containerPointToLatLng([mapSize.x * (1-frac), mapSize.y * (1-frac)])   // bottom-right corner
+        );
+        // var mapBounds = map.getBounds();
+        var targetCoordinate = L.latLng(latitude, longitude);
+
+        return mapBounds.contains(targetCoordinate);
+    }
+
+    // Draw functionality
+    // Initialize the draw control and pass it to the map
+    var drawnItems = new L.FeatureGroup().addTo(map);
+    var drawControl = new L.Control.Draw({
+        draw: {
+            marker: false,
+            circlemarker: true,
+            polyline: true,
+            polygon: true,
+            circle: false,
+            rectangle: false
+        },
+        edit: {
+            featureGroup: drawnItems,
+            edit: true,
+            remove: true
+        }
+    }).addTo(map);
+
+    // Initialize field on the map
+    updateLayerGroup(fieldData.geofence, 'geofence');
+    {% for task in task_geometries %}
+    updateLayerGroup(fieldData.tasks['{{ task.name }}'].geometry, '{{ task.name }}');
+    {% endfor %}
+    updateLayerGroup(fieldData.traject, 'traject');
+
+    // Document ready
+    $(document).ready(function() {
+        // Resize window properly
+        $('#map-container').height($(window).height() - $('#nav-bar').height() - $('#status-bar').height() - additionalPixelOffset);
+
+        // Buttons
+        $('#collapse-field-name').submit(function(e) {
+            e.preventDefault();
+
+            const form = $(this);
+            let newName = $('#input-field-name').val();
+
+            fetch(form.attr('action'), {
+                method: 'POST',
+                body: new FormData(form[0])
+            }).then(response => {
+                if (response.ok) {
+                    fieldData.name = newName;
+                    $('#button-field-name').removeClass('btn-outline-secondary').addClass('btn-outline-success');
+                    $('#collapse-field-name').collapse('hide');
+                } else {
+                    $('#button-field-name').removeClass('btn-outline-success').addClass('btn-outline-secondary');
+                }
+            })
+        });
+
+        $('#add-task-form').submit(function(e) {
+            e.preventDefault();
+            $(this).find('input[name="field_name"]').val(fieldData.name); // Change to the new field name
+            this.submit();
+        });
+
+        // Close other collapses on click
+        $('.collapse').on('show.bs.collapse', function () {
+            $('.collapse.show').each(function(){
+                if($(this).attr('id') !== $(event.target).attr('id')) {
+                    $(this).collapse('hide');
+                }
+            });
+        });
+
+        $('#collapse-field-name').on('show.bs.collapse', function () {
+            editableShape.name = '';
+            editableShape.data = [];
+            editableShape.type = '';
+        });
+
+        $('#collapse-traject').on('show.bs.collapse', function () {
+            editableShape.name = 'traject';
+            editableShape.data = fieldData.traject.latlng[0];
+            editableShape.type = 'polyline';
+            let inputMode = $("input[name=" + editableShape.name + "]:checked").val();
+            if (inputMode == 'draw') {
+                drawnItems.addLayer(L.circleMarker(editableShape.data));
+            }
+        });
+
+        $('#collapse-geofence').on('show.bs.collapse', function () {
+            editableShape.name = 'geofence';
+            editableShape.data = fieldData.geofence.latlng[0];
+            editableShape.type = 'polygon';
+            let inputMode = $("input[name=" + editableShape.name + "]:checked").val();
+            if (inputMode == 'draw') {
+                drawnItems.addLayer(L.polygon(editableShape.data));
+            }
+        });
+
+        // Get the host and port dynamically
+        var host = window.location.hostname;
+        var port = window.location.port;
+        var url = "/ws/robot/";
+
+        // Choose the appropriate protocol based on whether it's secure (https) or not
+        var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        
+        // WebSocket URL
+        var wsUrlRobot = protocol + '//' + host + (port ? ':' + port : '') + url;
+
+
+        // Use the value in JavaScript
+        console.log('Robot webSocket url:', wsUrlRobot);
+
+        const ws_robot = new ReconnectingWebSocket(wsUrlRobot);
+    
+        ws_robot.onmessage = (event) => {
+            // Clear all data first
+            robotGroup.clearLayers();
+
+            // Parse data
+            let data = JSON.parse(event.data);
+
+            // add layers
+            // Robot
+            robotLocation = data.robot.center;
+            L.polygon(data.robot.contours.latlng, {color: 'transparant', fillColor: 'blue', fillOpacity: 0.5}).addTo(robotGroup);
+
+            if (data.controller_info) {
+                let currentPoint = data.controller_info.current.latlng;
+                let carrotPoint = data.controller_info.carrot.latlng;
+                let closestPoint = data.controller_info.closest.latlng;
+                L.circleMarker(currentPoint, {color: 'transparant', fillColor: 'green', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
+                L.circleMarker(carrotPoint, {color: 'transparant', fillColor: 'green', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
+                L.circleMarker(closestPoint, {color: 'transparant', fillColor: 'green', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
+            }
+            // sections
+            for (let i=0; i < data.implements.length; i++) {
+                let implement = data.implements[i];
+                L.polygon(implement.sections.active.latlng, {color: 'red', weight: 1, fillOpacity: 0.5}).addTo(robotGroup);
+                L.polygon(implement.sections.inactive.latlng, {color: 'white', weight: 1, fillOpacity: 0.5}).addTo(robotGroup);
+            }
+
+            if (!executedRobotZoom) {
+                if (isLegitimateCoordinate(robotLocation.latlng)) {
+                     map.setView(robotLocation.latlng, 18); 
+                     executedRobotZoom = true;
+                }
+                else {
+                    map.setView([50.98203689815162, 3.7785538265089014], 16);
+                    executedRobotZoom = true;
+                }
+            }
+        }
+
+        {% for task in task_geometries %}
+        $('#collapse-{{ task.name }}').on('show.bs.collapse', function () {
+            let geometry = fieldData.tasks['{{ task.name }}'].geometry;
+            if ('rings' in geometry) {
+                editableShape.name = '{{ task.name }}';
+                editableShape.data = geometry.latlng[0];
+                editableShape.type = 'polygon';
+                let inputMode = $("input[name=" + editableShape.name + "]:checked").val();
+                if (inputMode == 'draw') {
+                    drawnItems.addLayer(L.polygon(editableShape.data));
+                }
+            } else if ('points' in geometry) {
+                editableShape.name = '{{ task.name }}';
+                editableShape.data = geometry.latlng
+                editableShape.type = 'circlemarker';
+                let inputMode = $("input[name=" + editableShape.name + "]:checked").val();
+                if (inputMode == 'draw') {
+                    drawnItems.addLayer(L.circleMarker(editableShape.data));
+                }
+            }
+        });
+        {% endfor %}
+
+        // window functionality
+        $(window).resize(function() {
+            let newHeight = $(window).height() - $('#nav-bar').height() - $('#status-bar').height() - additionalPixelOffset;
+            $('#map-container').height(newHeight);
+            $('#edit-field-container').css('max-height', newHeight);
+        });
+
+        // Drawing functionality
+
+        // Event listener for when a marker is created
+        map.on(L.Draw.Event.CREATED, function (event) {
+            var layer = event.layer;
+            let otherLayers = drawnItems.getLayers();
+
+            if (editableShape.name === 'traject') {
+                let correctShape = (layer instanceof L.Polyline) && !(layer instanceof L.Polygon);
+                if (!correctShape) {
+                    return;
+                }
+                removeDrawnLayers(otherLayers);
+            } else if (editableShape.name === 'geofence') {
+                let correctShape = (layer instanceof L.Polygon);
+                if (!correctShape) {
+                    return;
+                }
+                removeDrawnLayers(otherLayers);
+            } else {
+                let correctShape = (layer instanceof L.CircleMarker) || (layer instanceof L.Polygon);
+                if (!correctShape) {
+                    return;
+                }
+
+                // Remove all shapes of other type of drawnItems
+                if (layer instanceof L.CircleMarker) {
+                    editableShape.type = 'circlemarker';
+                    for (let i = 0; i < otherLayers.length; i++) {
+                        if (otherLayers[i] instanceof L.Polygon) {
+                            removeDrawnLayer(otherLayers[i]);
+                        }
+                    }
+                } else if (layer instanceof L.Polygon) {
+                    editableShape.type = 'polygon';
+                    for (let i = 0; i < otherLayers.length; i++) {
+                        if (otherLayers[i] instanceof L.CircleMarker) {
+                            removeDrawnLayer(otherLayers[i]);
+                        }
+                    }
+                }
+
+            }
+            drawnItems.addLayer(layer);
+        });
+
+    });
+</script>
+
+{% endblock %}

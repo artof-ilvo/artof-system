@@ -1,0 +1,259 @@
+{% load filters %}
+
+<!-- select rows -->
+{% include "components/select_row.html" with base_id="traject-row" %}
+
+<!-- Extention -->
+{% include "components/button_collapse.html" with title="Extention" base_id="traject-extention" %}
+<div class="collapse form-inline mt-2" id="collapse-traject-extention">
+    <div class="w-100 d-flex">
+    {% include "components/radio_multiple.html" with label="Side" options="begin,both,end"|split default="both" base_id="traject-extention" %}
+    <button onclick="acknowledgeTraject()" type="button" class="btn btn-outline-success ms-auto mb-2">{% include "icons/check2.html" %}</button>
+    </div>
+    {% include "components/input_number.html" with title="value (m)" base_id="traject-extention" step=1.0 %}
+</div> 
+
+<!-- Shift of the rows-->
+{% include "components/button_collapse.html" with title="Shift rows" base_id="traject-shift" %}
+<div class="collapse form-inline mt-2" id="collapse-traject-shift">
+    <div class="w-100 d-flex">
+        {% include "components/input_number.html" with title="value (m)" base_id="traject-shift" step=0.01 %}
+        <button onclick="acknowledgeTraject()" type="button" class="btn btn-outline-success ms-auto mb-2">{% include "icons/check2.html" %}</button>
+    </div>
+</div>
+
+<!-- Add rows -->
+{% include "components/button_collapse.html" with title="Add new row" base_id="traject-add" %}
+<div class="collapse form-inline mt-2" id="collapse-traject-add">
+    <div class="w-100 d-flex">
+        {% include "components/radio_multiple.html" with label="Side" options="begin,end"|split default="begin" base_id="traject-add" %}    
+        {% include "components/input_int.html" with title="" base_id="traject-add-number" default=1 step=1 min=1 max=100 %}
+        <div class="ms-auto">
+            <button id='switch-sign-traject-add' class="btn btn-outline-secondary ms-auto mb-2">{% include "icons/plus-slash-minus.html" %}</button>
+            <button id="check-traject-add" type="button" class="btn btn-outline-success ms-auto mb-2" disabled>{% include "icons/check2.html" %}</button>
+        </div>
+    </div>
+    <div class="w-100 d-flex">
+        {% include "components/input_number.html" with title="value (m)" base_id="traject-add" step=0.01 %}
+    </div>
+</div>
+
+<!-- Remove rows -->
+{% include "components/button_collapse.html" with title="Remove row" base_id="traject-remove" %}
+<div class="collapse form-inline mt-2 justify-content-end" id="collapse-traject-remove">
+    <button id="button-traject-remove-row" type="button" class="btn btn-outline-danger ms-auto">{% include "icons/trash.html" %}</button>
+</div>
+
+<!-- change row direction -->
+{% include "components/button_collapse.html" with title="Change directions" base_id="traject-direction" %}
+<div class="collapse form-inline mt-2" id="collapse-traject-direction">
+    <div class="me-2">
+        <input type="checkbox" class="btn-check" id="check-traject-reverse" autocomplete="off">
+        <label type="button" class="btn btn-outline-secondary mt-2 align-left d-flex" for="check-traject-reverse">
+            <label class="me-2">Reverse</label>{% include "icons/arrow-left-right.html" %}<div class="ms-auto"></div>
+        </label>
+    </div>
+
+    <div class="me-2">
+        <input type="checkbox" class="btn-check" id="check-traject-flip" autocomplete="off">
+        <label type="button" class="btn btn-outline-secondary mt-2 align-left d-flex" for="check-traject-flip">
+            <label class="me-2">Flip</label>{% include "icons/arrow-down-up.html" %}<div class="ms-auto"></div>
+        </label>
+    </div>
+</div>
+
+<!-- Drive in -->
+{% include "components/button_collapse.html" with title="Drive in" base_id="traject-drive" %}
+<div class="collapse form-inline mt-2 justify-content-end" id="collapse-traject-drive">
+    {% include "components/input_drive.html" with base_id="traject" %}
+</div>
+
+<script>
+    function drawDrivInLine(coordinates, end=false) {
+        if (coordinates.length > 0) {
+            L.circleMarker(coordinates[0], {
+                color: 'white', 
+                weight: 2, 
+                radius: 3,
+                fill: true
+            }).addTo(driveInGroup);
+            if (coordinates.length > 1) {
+                L.polyline(coordinates, {
+                    color: 'white',
+                    weight: 2
+                }).addTo(driveInGroup);
+                if (end) {
+                    L.circleMarker(coordinates[coordinates.length-1], {
+                        color: 'white', 
+                        weight: 2, 
+                        radius: 3,
+                        fill: true
+                    }).addTo(driveInGroup);
+                }
+            }
+        }
+    }
+
+    function drawTrajectOverlay(trajectCoordinates) {
+        // Draw traject
+        var overlayTraject = L.polyline(trajectCoordinates, {
+            color: 'black',
+            dashArray: '10, 10', 
+            weight: 2
+        }).addTo(overlayGroup);
+        var overlayDecorator = L.polylineDecorator(overlayTraject, {
+            patterns: [
+                {offset: 25, repeat: 50, symbol: L.Symbol.arrowHead({pixelSize: 10, polygon: true, pathOptions: {color: 'black', fillOpacity: 0, weight: 2}})}
+            ]
+        }).addTo(overlayGroup);
+    }
+
+    function fetchTraject(operation, data, commands=undefined) {
+        return new Promise((resolve, reject) => fetch("{% url 'core:map_edit_traject_operation' %}", {
+            method: 'POST',
+            body: JSON.stringify({
+                'operation': operation,
+                'data': data, 
+                'commands': commands             
+            }),
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        }).then(response => response.json()).then(data => {
+            overlayGroup.clearLayers();
+            drawTrajectOverlay(data.latlng);
+            resolve(data.path);
+        }).catch(error => {
+            reject('Error:', error);
+        }).finally(() => {
+            reject('Failed to fetch new path');
+        }));
+    }
+
+    function clearTrajectPanel() {
+        // Hide panels
+        $('#collapse-traject-extention').collapse('hide');
+        $('#collapse-traject-shift').collapse('hide');
+        $('#collapse-traject-add').collapse('hide');
+        $('#collapse-traject-remove').collapse('hide');
+        $('#collapse-traject-direction').collapse('hide');
+        $('#collapse-traject-drive').collapse('hide');
+
+        // Traject panel
+        $("#check-traject-reverse").prop("checked", false);
+        $("#check-traject-flip").prop("checked", false);
+        $('#traject-extention').val(0);
+        $('#traject-shift').val(0);
+        $('#traject-add').val(0);
+        clearRowSelect();
+        clearDriveIn('traject-drive');
+
+        // recreate origingal traject
+        fieldData.traject.paths = backupFieldData.traject.paths;
+        originalFieldData.traject.paths = backupFieldData.traject.paths;
+    }
+
+    function acknowledgeTraject() {
+        if (!arraysEqual(originalFieldData.traject.paths, fieldData.traject.paths)) {
+            originalFieldData.traject.paths = fieldData.traject.paths;
+            $('#button-upload').attr('disabled', false);
+        }
+    }
+
+    $(document).ready(function () {
+        function disableButton() {
+            $('#check-traject-add').prop('disabled', true);
+        }
+
+        function enableButton() {
+            $('#check-traject-add').prop('disabled', false);
+        }
+
+        function fetchAndUpdateTraject() {
+            if ($('#traject-add')[0].checkValidity()) {
+                let commands = {
+                    'distance': parseFloat($('#traject-add').val()),
+                    'side': $("input[name='traject-add']:checked").val(),
+                    'number': parseInt($('#traject-add-number').val())
+                };
+                console.log(commands);
+
+                disableButton();
+
+                fetchTraject('add', originalFieldData.traject.paths, commands)
+                    .then((data) => {
+                        fieldData.traject.paths = [data]; 
+                        console.log(fieldData.traject.paths);
+                        // Re-enable the button after successful update
+                        enableButton();
+                    })
+                    .catch((error) => {
+                        console.log(error);
+                        // Re-enable the button even if there is an error
+                        enableButton();
+                    });
+            } else {
+                // Re-enable the button if the form is invalid
+                enableButton();
+            }
+        }
+
+        $('#check-traject-reverse').change(function (e) {
+            fetchTraject('reverse', fieldData.traject.paths).then((data) => {fieldData.traject.paths = data; acknowledgeTraject(); console.log(fieldData.traject.paths);}).catch((error) => console.log(error));
+        });
+        $('#check-traject-flip').change(function (e) {
+            fetchTraject('flip', fieldData.traject.paths).then((data) => {fieldData.traject.paths = [data]; acknowledgeTraject(); console.log(fieldData.traject.paths);}).catch((error) => console.log(error));
+        });
+        $('#traject-extention').change(function (e) {
+            if ($('#traject-extention')[0].checkValidity()) {
+                let commands = {
+                    'length': parseFloat($('#traject-extention').val()),
+                    'row_number': getSelectedRows(),
+                    'side': $("input[name='traject-extention']:checked").val()
+                };
+                console.log(commands);
+                fetchTraject('extend', originalFieldData.traject.paths, commands).then((data) => {fieldData.traject.paths = [data]; console.log(fieldData.traject.paths);}).catch((error) => console.log(error));
+            }
+        });
+        $('#traject-shift').change(function (e) {
+            if ($('#traject-shift')[0].checkValidity()) {
+                let commands = {
+                    'distance': parseFloat($('#traject-shift').val()),
+                    'row_number': getSelectedRows()
+                };
+                console.log(commands);
+                fetchTraject('shift', originalFieldData.traject.paths, commands).then((data) => {fieldData.traject.paths = [data]; console.log(fieldData.traject.paths);}).catch((error) => console.log(error));
+            }
+        });
+        $('#traject-add, input[name="traject-add"]').on('change', fetchAndUpdateTraject); 
+               
+
+        $('#check-traject-add').click(function (e) {
+            // Disable the button to prevent multiple clicks
+            disableButton();
+
+            acknowledgeTraject();
+            // Newly add a traject line
+            $('#traject-add').val(-$('#traject-add').val());
+            $('#traject-add').change();
+        });
+        $('#switch-sign-traject-add').click(function (e) {
+            $('#traject-add').val(-$('#traject-add').val());
+            $('#traject-add').change();
+        });
+        $('#button-traject-remove-row').click(function (e) {
+            let commands = {
+                'row_number': getSelectedRows()
+            };
+            console.log(commands);
+            if (commands.row_number < 0) {
+                console.log("Cannot remove all rows");
+            } else {
+                fetchTraject('remove', fieldData.traject.paths, commands).then((data) => {fieldData.traject.paths = [data]; acknowledgeTraject(); console.log(fieldData.traject.paths);}).catch((error) => console.log(error));
+            }
+        });
+
+    });
+
+</script>

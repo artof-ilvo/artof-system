@@ -1,0 +1,58 @@
+{% extends "system/base.html" %} {% block title %} Settings {% endblock %}
+{% block content %}
+
+<h2>Settings</h2>
+<div class="table-responsive">
+<table class="table">
+  <thead>
+    <tr>
+      <th scope="col">#</th>
+      <th scope="col">Name</th>
+      <th scope="col" class="text-right">Edit</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th scope="row">1</th>
+      <td>System Settings</td>
+      <td class="text-right">
+        <div class="btn-group button-group">
+          <form method="GET" action="{% url 'system:edit_settings' %}">
+            <button type="submit" class="btn btn-outline-primary" name="filename" value="settings.json">
+              {% include "icons/pen.html" %}
+            </button>
+          </form>
+          </div>
+        </td>
+    </tr>
+    <tr>
+      <th scope="row">2</th>
+      <td>Redis Configuration</td>
+      <td class="text-right">
+        <div class="btn-group button-group">
+          <form method="GET" action="{% url 'system:edit_settings' %}">
+            <button type="submit" class="btn btn-outline-primary" name="filename" value="config.json">
+              {% include "icons/pen.html" %}
+            </button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <th scope="row">3</th>
+      <td>Types</td>
+      <td class="text-right">
+        <div class="btn-group button-group">
+          <form method="GET" action="{% url 'system:edit_settings' %}">
+            <button type="submit" class="btn btn-outline-primary" name="filename" value="types.json">
+              {% include "icons/pen.html" %}
+            </button>
+          </form>
+        </div>
+      </td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+{% endblock %}

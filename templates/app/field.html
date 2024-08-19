@@ -1,0 +1,132 @@
+{% extends "app/base.html" %} {% block title %} Field {% endblock %}
+{% block content %}
+
+<h2 class="mb-2">Field</h2>
+<div class="container-fluid d-flex p-0 flex-wrap">
+    <h3>Selected field: {{ current_field }}</h3>
+    <div class="d-flex flex-grow-1 justify-content-end">
+        <div class="form-inline">
+            <input class="form-control me-2 sm-2" type="search" placeholder="Search" aria-label="Search" id="search">
+        </div>
+        <form method="GET" action="{% url 'core:field_edit' %}">
+            <input type="hidden" name="name" value="New">
+            <button type="submit" class="btn btn-outline-primary ms-1">New</button>
+        </form>
+    </div>
+</div>
+
+<div class="table-responsive">
+<table class="table w-100">
+    <thead>
+      <tr>
+        <th scope="col">Name</th>
+        <th scope="col">Edit</th>
+        <th scope="col" class="text-right">Delete</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for fieldName in fields %}
+    <tr id="{{ fieldName }}_row">
+        <td>
+            <div class="btn-group button-group d-flex">
+                <form method="GET" action="{% url 'core:field_select' %}">
+                    <button type="submit" class="btn btn-success" name="name" value="{{ fieldName }}" {% if current_field == fieldName %}disabled{% endif %}>
+                        {% include "icons/check2.html" %}
+                    </button>
+                </form>
+                <label class="label {% if current_field == fieldName %}disabled{% endif %}" 
+                {% if current_field == fieldName %}disabled{% endif %} for="{{ fieldName }}"" {% if current_field == fieldName %}style="font-weight: bold;"{% endif %}>{{ fieldName }}</label>
+                <form id="{{ fieldName }}" method="GET" action="{% url 'core:field_select' %}">
+                    <input type="hidden" name="name" value="{{ fieldName }}">
+                </form>
+            </div>
+        </td>
+        <td>
+            <div class="btn-group button-group">
+                <form method="GET" action="{% url 'core:field_duplicate' %}">
+                    <button type="submit" class="btn btn-secondary" name="name" value="{{ fieldName }}">
+                        {% include "icons/copy.html" %}
+                    </button>
+                </form>
+                <form method="GET" action="{% url 'core:field_edit' %}">
+                    <button type="submit" class="btn btn-primary" name="name" value="{{ fieldName }}">
+                        {% include "icons/pen.html" %}
+                    </button>
+                </form>
+            </div>
+        </td>
+        <td>
+            <div class="btn-group button-group">
+                <div class="ms-auto" >
+                    <button type="button" class="btn btn-primary" onclick="downloadField('{{ fieldName }}')">
+                        {% include "icons/download.html" %}
+                    </button>
+                </div>
+                <form method="GET" action="{% url 'core:field_delete' %}">
+                    <button type="submit" class="btn btn-danger" name="name" value="{{ fieldName }}" {% if current_field == fieldName %}disabled{% endif %}>
+                        {% include "icons/trash.html" %}
+                    </button>
+                </form>
+            </div>
+        </td>
+    </tr>
+    {% endfor %}
+  
+    </tbody>
+</table>
+</div>
+
+<script>
+    function downloadField(fieldName) {
+        fetch('{% url 'core:field_download' %}?name=' + fieldName) 
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            // Create a temporary link element
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fieldName + '.zip';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        })
+        .catch(error => {
+            console.error('There was a problem with the fetch operation:', error);
+        });
+    }
+
+    $(document).ready(function() {
+        $('#search').on('keyup', function() {
+            var filter = $("#search").val().toLowerCase();
+            var trElements = $('.table tbody tr');
+            trElements.each(function() {
+            var text = $(this).text().toLowerCase();
+            if (text.indexOf(filter) > -1) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+            })
+        });
+    });
+
+    document.querySelectorAll('.label:not(.disabled)').forEach(function(label) {
+        label.addEventListener('click', function() {
+            // Find the form associated with this label
+            var formId = label.getAttribute('for');
+            var form = document.getElementById(formId);
+            // Submit the form
+            if (form) {
+                form.submit();
+            }
+        });
+    });
+</script>
+
+{% endblock %}

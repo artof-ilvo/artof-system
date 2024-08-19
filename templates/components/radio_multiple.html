@@ -1,0 +1,17 @@
+<div class="btn-group mb-2" role="group" id="radio-container">
+    <label class="btn btn-outline-secondary" type="button">{{ label }}</label>
+    {% for option in options %}
+        <input type="radio" class="btn-check" name="{{base_id}}" value="{{option}}" id="radio-{{base_id}}-{{option}}" {% if option == default %} checked {% endif %}>
+        <label class="btn btn-outline-primary" for="radio-{{base_id}}-{{option}}" type="button">{{option}}</label>
+    {% endfor %}
+</div> 
+
+<style>
+    #radio-container {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.25em;
+    }
+
+</style>

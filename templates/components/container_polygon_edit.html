@@ -1,0 +1,108 @@
+<!-- Buffer of the polygons-->
+{% include "components/button_collapse.html" with title="Buffer" base_id="polygon-buffer" %}
+<div class="collapse form-inline mt-2" id="collapse-polygon-buffer">
+        {% include "components/input_number.html" with title="value (m)" base_id="polygon-buffer" step=0.5 %}
+        <button onclick="acknowledgePolygon()" type="button" class="btn btn-outline-success">{% include "icons/check2.html" %}</button>
+</div>
+
+<script>
+    function drawPolygonOverlay(polygonCoordinates) {
+        // Draw traject
+        L.polygon(polygonCoordinates, {
+            color: 'black',
+            dashArray: '10, 10', 
+            weight: 2,
+            fill: false,
+        }).addTo(overlayGroup);
+    }
+
+    function fetchPolygon(operation, data, commands=undefined) {
+        return new Promise((resolve, reject) => fetch("{% url 'core:map_edit_polygon_operation' %}", {
+            method: 'POST',
+            body: JSON.stringify({
+                'operation': operation,
+                'data': data, 
+                'commands': commands             
+            }),
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        }).then(response => response.json()).then(data => {
+            overlayGroup.clearLayers();
+            drawPolygonOverlay(data.latlng);
+            resolve(data.rings);
+        }).catch(error => {
+            reject('Error:', error);
+        }).finally(() => {
+            reject('Failed to fetch new polygon');
+        }));
+    }
+
+    function clearPolygonPanel() {
+        // Hide panels
+        $('#collapse-polygon-buffer').collapse('hide');
+
+        // Polygon panel
+        $('#polygon-buffer').val(0);
+
+        // recreate origingal polygon
+        if (typeof editShape === 'string' && editShape !== '') {
+            if (editShape === 'traject') {
+                // do nothing
+            } else if (editShape === 'geofence') {
+                fieldData[editShape].rings = backupFieldData[editShape].rings;
+                originalFieldData[editShape].rings = backupFieldData[editShape].rings;
+            } else {  // tasks
+                fieldData.tasks[editShape].geometry.rings = backupFieldData.tasks[editShape].geometry.rings;
+                originalFieldData.tasks[editShape].geometry.rings = backupFieldData.tasks[editShape].geometry.rings;
+            }
+        }
+
+    
+    }
+
+    function acknowledgePolygon() {
+        if (editShape === 'geofence') {
+            if (!arraysEqual(originalFieldData[editShape].rings, fieldData[editShape].rings)) {
+                originalFieldData[editShape].rings = fieldData[editShape].rings;
+                $('#button-upload').attr('disabled', false);
+            }
+        } else {
+            if (!arraysEqual(originalFieldData.tasks[editShape].geometry.rings, fieldData.tasks[editShape].geometry.rings)) {
+                originalFieldData.tasks[editShape].geometry.rings = fieldData.tasks[editShape].geometry.rings;
+                $('#button-upload').attr('disabled', false);
+            }
+        }
+
+    }
+
+    $(document).ready(function () {
+        $('#polygon-buffer').change(function (e) {
+            if ($('#polygon-buffer')[0].checkValidity()) {
+                let commands = {'distance': parseFloat($('#polygon-buffer').val())};
+
+                if (editShape === 'geofence') {
+                    fetchPolygon('buffer', originalFieldData[editShape].rings, commands)
+                    .then((data) => {fieldData[editShape].rings = data; })
+                    .catch((error) => console.log(error));
+                } else {
+                    fetchPolygon('buffer', originalFieldData.tasks[editShape].geometry.rings, commands)
+                    .then((data) => { fieldData.tasks[editShape].geometry.rings = data; })
+                    .catch((error) => console.log(error));
+                }
+
+            }
+        });
+    });
+</script>
+
+<style>
+#collapse-polygon-buffer {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+</style>

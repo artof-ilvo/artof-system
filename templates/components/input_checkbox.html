@@ -1,0 +1,13 @@
+<div>
+<input type="checkbox" class="btn-check" id="id_{{ base_id }}_check" name="float_{{ base_id }}" value="on" autocomplete="off" {% if initial %}checked{% endif %}>
+<label class="btn btn-outline-secondary side-widget m-0 pt-0 pb-0 pl-2 pr-2" for="id_{{ base_id }}_check">{{ text }}</label>
+</div>
+
+<script>
+$(document).ready(function() {
+    $('#id_{{ base_id }}_check').on('change', function() {
+        let form = $(this).closest('form');
+        form.submit();
+    });
+})
+</script>

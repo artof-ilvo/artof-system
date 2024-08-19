@@ -1,0 +1,4 @@
+artof_utils==0.0.1
+django>=5.0
+daphne
+channels

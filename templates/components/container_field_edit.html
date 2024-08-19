@@ -1,0 +1,134 @@
+{% load filters %}
+
+<div class="w-100 d-flex">
+    {% include "components/radio_multiple.html" with label="Input" options="original,file,draw,drive"|split default="original" base_id=base_id %}    
+    <button id="check-{{ base_id }}" class="btn btn-outline-success ms-auto mb-2">{% include "icons/check2.html" %}</button>
+</div>
+
+<div id="original-{{ base_id }}">
+    <label>Keep the shape file from the system. Press check.</label>
+</div>
+<div id="file-{{ base_id }}" style="display: none;">
+    <label class="mb-1">Input the shape files (.shp, .shx, .dbf, .prj, .cpg) and press check when ready.</label>
+    <input type="file" class="form-control" multiple="" min_num="3" max_num="6" accept=".shp, .shx, .dbf, .prj, .cpg" max_file_size="5242880" id="file-input-{{ base_id }}">
+</div>
+<div id="draw-{{ base_id }}" style="display: none;">
+    <label>Draw on the map and press check when ready.</label>
+</div>
+<div id="drive-{{ base_id }}" style="display: none;">
+    <label>You can drive in later on the map screen. Press check.</label>
+</div>
+
+<script>
+$(document).ready(function() {
+    $('#check-{{ base_id }}').click(function(e) {
+        e.preventDefault();
+
+        let inputMode = $('input[name="{{ base_id }}"]:checked').val();
+
+        if (inputMode === "draw") {
+            let features = getAllDrawnFeatures();
+            if (features.length === 0) {
+                showNotification("Please draw a line on the map. The number of drawn features is zero.");
+                return;
+            }
+
+            let data;
+            if ('{{ base_id }}' === 'traject') {
+                data = fieldData.traject;
+            } else if ('{{ base_id }}' === 'geofence') {
+                data = fieldData.geofence;
+            } else {
+                data = fieldData.tasks['{{ base_id }}'].geometry;
+            }
+
+            if (data !== undefined && features.length > 0) {
+                data.empty = false;
+                data.latlng = features;
+                updateLayerGroup(data, '{{ base_id }}');
+            }
+        }
+
+        // upload form data
+        const form = $('#collapse-{{ base_id }}');
+
+        formData = new FormData(form[0]);
+        formData.append('name', fieldData.name);
+        formData.append('input_mode', inputMode);
+        if ('{{ base_id }}' == 'geofence'  || '{{ base_id }}' == 'traject') {
+            formData.append('data', JSON.stringify(fieldData['{{ base_id }}']));
+        } else {
+            formData.append('data', JSON.stringify(fieldData.tasks['{{ base_id }}']));
+        }
+
+        fetch(form.attr('action'), {
+            method: 'POST',
+            body: formData
+        }).then(response => {
+            if (response.ok) {
+                $('#button-{{ base_id }}').removeClass('btn-outline-secondary').addClass('btn-outline-success');
+                $('#collapse-{{ base_id }}').collapse('hide');
+            } else {
+                $('#button-{{ base_id }}').removeClass('btn-outline-success').addClass('btn-outline-secondary');
+            }
+        })
+    });
+
+    // Add event listener to radio buttons
+    $("input[name='{{ base_id }}']").change(function() {
+        // Get the value of the selected radio button
+        var selectedValue = $(this).val();
+
+        $("#original-{{ base_id }}").toggle(selectedValue === "original");
+        $("#file-{{ base_id }}").toggle(selectedValue === "file");
+        $("#draw-{{ base_id }}").toggle(selectedValue === "draw");
+        $("#drive-{{ base_id }}").toggle(selectedValue === "drive");
+
+        if (editableShape.name === '{{ base_id }}') {
+            if (selectedValue === "draw") {
+                // Add shape to editableFeatures
+                clearDrawnFeatures();
+                let layer;
+                if (editableShape.type === 'circlemarker') {
+                    layer = L.circleMarker(editableShape.data);
+                } else if (editableShape.type === 'polyline') {
+                    layer = L.polyline(editableShape.data);
+                } else if (editableShape.type === 'polygon') {
+                    layer = L.polygon(editableShape.data);
+                }
+                if (layer) {
+                    drawnItems.addLayer(layer);
+                }
+                
+            } else {
+                clearDrawnFeatures();
+            }    
+        }
+    });
+
+    // Add event listener to file input
+    $('#file-input-{{ base_id }}').change(function() {
+        var files = $(this)[0].files;
+
+        var formData = new FormData();
+        for (var i = 0; i < files.length; i++) {
+            formData.append('files', files[i]); // Append files without a name
+        }
+
+        fetch("{% url 'core:field_edit_shapefile' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        }).then(response => response.json()).then(data => {
+            updateLayerGroup(data, "{{ base_id }}");
+        }).catch(error => {
+            console.log('Error:', error);
+        })
+    });
+
+});
+
+
+</script>

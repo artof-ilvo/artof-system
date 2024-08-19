@@ -1,0 +1,55 @@
+<div class="d-flex justify-content-right">
+    {% include "components/button_collapse.html" with title=task.name base_id=task.name %}
+    <form method="GET" action="{% url 'core:field_edit_task_remove' %}" id="remove-{{ task.name }}-form">
+        <input type="hidden" name="field_name" value="{{ field_name }}">
+        <input type="hidden" name="task_name" value="{{ task.name }}">
+        <button class="btn btn-outline-danger ms-2 mt-2" id="remove-{{ task.name }}" type="submit">{% include "icons/trash.html" %}</button>
+    </form>
+</div>
+<form class="collapse form-inline mt-2" id="collapse-{{ task.name }}" method="POST" action="{% url 'core:field_edit_task' %}">
+    {% csrf_token %}
+    {% include "components/container_field_edit.html" with base_id=task.name %}
+    <div class="d-flex w-100 mt-2 justify-content-between">
+        <label for="hitch-{{ task.name }}" class="col-form-label me-2">Hitch:</label>
+        <select id="hitch-{{ task.name }}" name="{{ task.name }}" class="form-select">
+            {% for key, value in hitch_choices %}
+                <option value="{{ value }}" {% if value == task.hitch %}selected{% endif %}>{{ value }}</option>
+            {% endfor %}
+        </select>
+        <label for="type-{{ task.name }}" class="col-form-label me-2 ms-4">Type:</label>
+        <select id="type-{{ task.name }}" name="{{ task.name }}" class="form-select">
+            {% for key, value in type_choices %}
+                <option value="{{ value }}" {% if key == task.type %}selected{% endif %}>{{ value }}</option>
+            {% endfor %}
+        </select>
+        <label for="implement-{{ task.name }}" class="col-form-label me-2 ms-4">Implement:</label>
+        <select id="implement-{{ task.name }}" name="{{ task.name }}" class="form-select">
+            {% for key, value in implement_choices %}
+                <option value="{{ value }}" {% if key == task.implement %}selected{% endif %}>{{ value }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</form> 
+
+<script>
+    $(document).ready(function() {
+        $("#remove-{{ task.name }}-form").submit(function(e) {
+            e.preventDefault();
+            $(this).find('input[name="field_name"]').val(fieldData.name); // Change to the new field name
+            this.submit();
+        });
+
+        $('#type-{{ task.name }}').change(function() {
+            fieldData.tasks.{{ task.name }}.type = this.value;
+        });
+
+        $('#hitch-{{ task.name }}').change(function() {
+            fieldData.tasks.{{ task.name }}.hitch = this.value;
+        });
+
+        $('#implement-{{ task.name }}').change(function() {
+            fieldData.tasks.{{ task.name }}.implement = this.value;
+        });
+    })
+
+</script>

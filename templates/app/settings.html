@@ -1,0 +1,56 @@
+{% extends "app/base.html" %} {% block title %} Settings {% endblock %}
+{% block content %}
+
+<h2>Settings</h2>
+
+<h3>Hitches</h3>
+<form method="POST" action="{% url 'core:update_hitch_settings' %}" id="update_hitch" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    {% for hitch in hitches %}
+        <div class="d-flex">
+            <div class="container-fluid">
+                {% include 'components/input_slider.html' with name='Hitch '|add:hitch.name base_id=hitch.name initial_value=hitch.setpoint min_value=hitch.min max_value=hitch.max unit='cm' step=1 %}
+            </div>
+            {% include 'components/input_checkbox.html' with text='float' base_id=hitch.name initial=hitch.float %}
+        </div>
+    {% endfor %}
+</form>
+
+<h3>Navigation</h3>
+<form method="POST" action="{% url 'core:update_navigation_settings' %}" id="update_navigation" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    <div class="row mb-2">
+        <label for="navigation-mode-select" style="font-size: 1.2em" class="col-sm-2 col-form-label">Navigation Mode</label>
+        <div class="col-sm-2">
+            <select name="navigation_mode" class="form-control" id="id_navigation_mode" onchange="submitClosestForm()">
+                {% for id, mode in navigation_mode.modes %}
+                    <option value="{{ id }}" {% if navigation_mode.mode == id %}selected{% endif %}>{{ mode }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    {% for slider in navigation_sliders %}
+        {% include 'components/input_slider.html' with name=slider.name base_id=slider.base_id initial_value=slider.initial min_value=slider.min max_value=slider.max unit=slider.unit step=slider.step %}
+    {% endfor %}
+</form>
+
+
+<!-- Custom JavaScript for dynamic value display -->
+<script>
+    function updateLabel(value, label_id, unit) {
+        var label = document.getElementById(label_id);
+        label.textContent = value + " " + unit;
+    }
+
+    $(document).ready(function() {
+        $('#id_navigation_mode').change(function() {
+            let form = $(this).closest('form');
+            form.submit();
+        });
+    })
+  </script>
+
+{% endblock %}

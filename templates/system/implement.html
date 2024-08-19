@@ -1,0 +1,46 @@
+{% extends "system/base.html" %} {% block title %} Implements {% endblock %}
+{% block content %}
+<form method="GET" action="{% url 'system:implement_edit' %}" style="display: flex; padding: 10px;">
+  <h2>Implement</h2>
+  <button type="submit" class="btn btn-primary my-2" style="margin-left: auto;" name="name" value="new">
+    {% include "icons/plus.html" %} Add
+  </button>
+</form>
+
+<div class="table-responsive">
+<table class="table">
+  <thead>
+    <tr>
+      <th scope="col">#</th>
+      <th scope="col">Name</th>
+      <th scope="col">Edit</th>
+      <th scope="col" class="text-right">Delete</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for implement in implements %}
+    <tr>
+      <th scope="row">{{ implement.idx }}</th>
+      <td>{{ implement.name }}</td>
+      <td>
+        <form method="GET" action="{% url 'system:implement_edit' %}">
+          <button type="submit" class="btn btn-outline-primary" name="name" value="{{ implement.name }}">
+            {% include "icons/pen.html" %}
+          </button>
+        </form>
+      </td>
+      <td class="text-right">
+        <form method="GET" action="{% url 'system:implement_remove' %}">
+          <button type="submit" class="btn btn-outline-danger" name="name" value="{{ implement.name }}">
+            {% include "icons/trash.html" %}
+          </button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+
+  </tbody>
+</table>
+</div>
+
+{% endblock %}

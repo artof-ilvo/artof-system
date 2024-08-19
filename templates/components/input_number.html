@@ -1,0 +1,22 @@
+<div class="w-100 d-flex flex-1">
+    <label class="form-label mb-1 me-1 text-left" {% if not title %}hidden{% endif %}>{{ title }}</label>
+    <button id="button-decrease-{{ base_id }}" type="button" class="btn btn-outline-secondary">{% include "icons/dash.html" %}</button>
+    <input class="form-control text-center" type="number" step={{ step }} id="{{ base_id }}" value="0.00" min="-100" max="100">
+    <button id="button-increase-{{ base_id }}" type="button" class="btn btn-outline-secondary">{% include "icons/plus.html" %}</button>  
+</div>
+
+<script>
+    $("#button-increase-{{ base_id }}").click(function() {
+        $("#{{ base_id }}").val((parseFloat($("#{{ base_id }}").val()) + {{ step }}).toFixed(2)).trigger("change");
+    });
+    $("#button-decrease-{{ base_id }}").click(function() {
+        $("#{{ base_id }}").val((parseFloat($("#{{ base_id }}").val()) - {{ step }}).toFixed(2)).trigger("change");
+    });
+</script>
+
+<style>
+.flex-1 {
+    flex: 1;
+    gap: .5rem;
+}
+</style>

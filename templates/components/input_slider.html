@@ -1,0 +1,30 @@
+<div class="row mb-2">
+    <label class="col-sm-2" style="font-size: 1.2em;">{{ name }}</label>
+    <div class="col-sm-1">
+        <div class="d-flex justify-content-start">
+            <span id="{{ base_id }}-label" class="badge text-bg-secondary" style="font-size: 1em; width: 5em">{{ initial_value }}</span>
+        </div>
+    </div>
+    <div class="col d-flex justify-content-start">
+        <label>{{ min_value }} {{ unit }}</label>
+    </div>
+    <div class="col-sm-7">
+        <input type="range" id="{{ base_id }}-slider" name="{{ base_id }}" value="{{ initial_value }}" class="form-range" step="{{ step }}" min="{{ min_value }}" max="{{ max_value }}">
+    </div>
+    <div class="col d-flex justify-content-start">
+        <label>{{ max_value }} {{ unit }}</label>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    $('#{{ base_id }}-slider').on('input', function() {
+        $('#{{ base_id }}-label').text(this.value);
+    });
+
+    $('#{{ base_id }}-slider').on('change', function() {
+        let form = $(this).closest('form');
+        form.submit();
+    });
+})
+</script>

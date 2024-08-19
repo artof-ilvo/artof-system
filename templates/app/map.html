@@ -1,0 +1,602 @@
+{% extends "app/base.html" %} {% block title %} Map {% endblock %}
+{% block content %}
+
+<div class="d-flex" id="overall-container">
+    <div id="map-container" style="width: 100%; height: calc(100vh - 5em);"></div>
+    
+    <div id="edit-field-container" class="mt-2 overflow-auto" style="width: 30em; display: none">
+            <div class="mt-1 d-flex">
+                <select class="form-select" id="edit-field-select">
+                    <option value="" selected>Select to edit</option>
+                    <option value="traject">Traject</option>
+                    <option value="geofence">Geofence</option>
+                    {% for task in task_geometries %}
+                        <option value="{{ task.name }}">{{ task.name }}: {{ task.type }}, {{ task.hitch }}</option> 
+                    {% endfor %}
+                </select>
+                <form method="POST" action="{% url 'core:map_edit_shape' %}" id="map-edit-upload-form">
+                    {% csrf_token %}
+                    <input name="shape" id="map-edit-shape-attr" type="hidden">
+                    <input name="geometries" id="map-edit-geometries-attr" type="hidden">
+                    <button class="btn btn-primary ms-2" id="button-upload" disabled>
+                        {% include "icons/upload.html" %}
+                    </button>
+                </form>
+            </div>
+
+            <!-- Page controls -->
+            <div class="mt-3" id="edit-traject-shape-panel" style="display: none">
+                {% include "components/container_traject_edit.html" %}
+            </div>
+
+            <div class="mt-3" id="edit-polygon-shape-panel" style="display: none">
+                {% include "components/container_polygon_edit.html" %}
+            </div>
+    </div>
+    
+    <div class="mt-2" style="" id="side-widget-container">
+        <div class="d-flex flex-column" id="sub-side-widget-container">
+            <!-- track robot -->
+            <button id='folow-robot-button' type="button" class="btn mb-2 btn-outline-secondary side-widget">{% include "icons/crosshair.html" %}</button>
+            <!-- track robot -->
+            <button id='direct-robot-button' type="button" class="btn mb-2 btn-outline-secondary side-widget">{% include "icons/cursor.html" %}</button>
+            <!-- Edit field -->
+            <button id='edit-field-button' type="button" class="btn btn-outline-secondary mb-2 side-widget">{% include "icons/pen.html" %}</button>
+            <!-- Simulation -->
+            <form id="simulation-form">
+                {% csrf_token %}
+                <input type="checkbox" class="btn-check" id="simulation-check" name="simulation" value="on" autocomplete="off" {% if simulation.active %}checked{% endif %}>
+                <label class="btn btn-outline-secondary mb-2 p-0 side-widget" for="simulation-check" >Sim</label>
+            </form>
+            <form id="simulation-factor-form" style="display: {% if simulation.active %}block{% else %}none{% endif %};">
+                {% csrf_token %}   
+                <label class="form-label mb-1 mt-1 lb-sm">Factor</label>
+                <button id="increase-simulation-factor-button" type="button" class="btn btn-outline-secondary mb-2 side-widget">{% include "icons/plus.html" %}</button>
+                <input type="number" class="form-control side-widget mb-2 text-center" min="0" max="32" step=1 id="simulation-factor" name="factor" value="{{ simulation.speed_factor }}">
+                <button id="decrease-simulation-factor-button" type="button" class="btn mb-2 btn-outline-secondary side-widget">{% include "icons/dash.html" %}</button>             
+                <button id="command-robot-button" type="button" class="mb-2 btn btn-outline-secondary side-widget">{% include "icons/command.html" %}</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    .side-widget {
+        width: 3em;
+        height: 3em;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    #edit-field-container {
+        display: flex;
+        flex-direction: row;
+
+    }
+
+    #side-widget-container {
+        margin: 0;
+        width: fit-content;
+        display: flex;
+        flex-direction: column;
+    }
+
+    #sub-side-widget-container {
+        width: fit-content;
+        padding-left: .5rem;
+    }
+
+    #overall-container {
+        justify-content: center;
+    }
+    
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    input[type=number] {
+        -moz-appearance:textfield;
+    }
+
+
+    @media screen and (min-width: 768px) {
+        #map-container {
+            flex: 1;
+        }
+        #edit-field-container {
+            padding-left: 1rem;
+        }
+
+        #sub-side-widget-container {
+            width: fit-content;
+            padding-left: .5rem;
+        }
+
+    }
+    
+</style>
+
+<script>
+    // Variables
+    var robotLocation;
+    var robotHeading;
+
+    // Creating map options
+    var mapOptions = {
+        center: [50.98203689815162, 3.7785538265089014],
+        zoom: 16,
+        rotate: true
+    }
+
+    function getMapOptions() {
+        if (sessionStorage.getItem('center')) {
+            try {
+                let sessionCenter = JSON.parse(sessionStorage.getItem('center'));
+                mapOptions.center = [sessionCenter.lat, sessionCenter.lng];
+            } catch(error) {
+                sessionStorage.clear();
+                console.error("center has an invalid format. Using default.");
+            }
+        }
+        if (sessionStorage.getItem('zoom')) {
+            try {
+                mapOptions.zoom = parseInt(sessionStorage.getItem('zoom'));      
+            } catch(error) {
+                sessionStorage.clear();
+                console.error("zoom has an invalid format. Using default.");
+            }
+        }
+        return mapOptions;
+    }
+
+    // Creating a map object
+    var map = new L.map('map-container', getMapOptions());
+    // Attach event listeners for zoom and location change
+    map.keyboard.disable();
+    map.on('zoomend', onMapChange);
+    map.on('moveend', onMapChange);
+
+    function onMapChange(e) {
+        let zoom = map.getZoom();
+        let center = map.getCenter();
+        sessionStorage.setItem('center', JSON.stringify(center));
+        sessionStorage.setItem('zoom', map.getZoom());
+    }
+
+    var layer = L.tileLayer('http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{
+        maxZoom: 25,
+        subdomains:['mt0','mt1','mt2','mt3']
+    });
+
+    // Adding layer to the map
+    map.addLayer(layer);
+
+    // Draw field
+    // Draw geofence
+    var geofenceGroup = L.layerGroup();
+    var geofenceCoordinates = {{ geofence_geometry.latlng }};
+    var geofence = L.polygon(geofenceCoordinates, {
+        color: 'red',
+        fill: false,
+    }).addTo(geofenceGroup);
+    geofenceGroup.addTo(map);
+
+    // Draw tasks
+    var taskGroup = L.layerGroup();
+    {% for task in task_geometries %}
+        var taskCoordinates = {{ task.geometry.latlng }};
+        {% if task.type == 'continuous' %}
+            var task{{ task.name}} = L.polygon(taskCoordinates, {color: 'blue', weight: 2, fillOpacity: 0.2}).addTo(taskGroup);
+        {% elif task.type == 'cardan' %}
+            var task{{ task.name}} = L.polygon(taskCoordinates, {color: 'yellow', weight: 2, fillOpacity: 0.2}).addTo(taskGroup);
+        {% elif task.type == 'hitch' %}
+            var task{{ task.name}} = L.polygon(taskCoordinates, {color: 'green', weight: 2, fillOpacity: 0.2}).addTo(taskGroup);
+        {% elif task.type == 'discrete' %}
+            for (let i = 0; i < taskCoordinates.length; i++) {
+                var task{{ task.name}} = L.circleMarker(taskCoordinates[i], {color: 'blue', weight: 2, fillOpacity: 0.2, radius: 3}).addTo(taskGroup);
+            }
+        {% elif task.type == 'intermittent' %}
+            for (let i = 0; i < taskCoordinates.length; i++) {
+                var task{{ task.name}} = L.circleMarker(taskCoordinates[i], {color: 'blue', weight: 2, fillOpacity: 0.2, radius: 3}).addTo(taskGroup);
+            }
+        {% endif %}
+    {% endfor %}
+
+    taskGroup.addTo(map);
+
+    // Draw traject
+    var trajectGroup = L.layerGroup();
+    var trajectCornerCoordinates = {{ traject_geometry.latlng.0 }};
+    var traject = L.polyline(trajectCornerCoordinates, {
+        color: 'red',
+        weight: 2,
+        fillOpacity: 0.5,
+        dashArray: '5, 10' 
+    }).addTo(trajectGroup);
+    var decorator = L.polylineDecorator(traject, {
+        patterns: [
+            {offset: 25, repeat: 50, symbol: L.Symbol.arrowHead({pixelSize: 10, polygon: true, pathOptions: {color: 'red', fillOpacity: 0, weight: 2}})}
+        ]
+    }).addTo(trajectGroup);
+    trajectGroup.addTo(map);
+
+    // Draw robot
+    var robotGroup = L.layerGroup().addTo(map);
+    var driveInGroup = L.layerGroup().addTo(map);
+    var overlayGroup = L.layerGroup().addTo(map);
+    var highlightGroup = L.layerGroup().addTo(map);   
+
+    // Aditional variables
+    var followRobot = sessionStorage.getItem('follow-robot') === 'true';
+    var directRobot = sessionStorage.getItem('direct-robot') === 'true';
+    var commandRobot = sessionStorage.getItem('command-robot') === 'true';
+    var editField = false;
+    var editShape = '';
+
+    var additionalPixelOffset = 30;
+    var fieldData = JSON.parse('{{ field_json | safe }}');
+    var originalFieldData = JSON.parse('{{ field_json | safe }}');
+    var backupFieldData = JSON.parse('{{ field_json | safe }}');
+
+    // Function to check if a coordinate is still visible on the map
+    function isCoordinateVisible(latitude, longitude) {
+        let mapSize = map.getSize();
+        let frac = 0.25;
+
+        var mapBounds = L.latLngBounds(
+            map.containerPointToLatLng([mapSize.x * frac, mapSize.y * frac]),  // top-left corner
+            map.containerPointToLatLng([mapSize.x * (1-frac), mapSize.y * (1-frac)])   // bottom-right corner
+        );
+        // var mapBounds = map.getBounds();
+        var targetCoordinate = L.latLng(latitude, longitude);
+
+        return mapBounds.contains(targetCoordinate);
+    }
+
+    // Additional map features
+    map.on('click', function(e) {
+        if ($('#simulation-check').is(':checked') && commandRobot) {
+            let lat = e.latlng.lat;
+            let lng = e.latlng.lng;
+
+            fetch("{% url 'core:map_simulation_position' %}", {
+                method: 'POST',
+                body: JSON.stringify({
+                    'lat': lat,
+                    'lon': lng
+                }),
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            });
+
+            console.log("You clicked at Latitude: " + lat + " and Longitude: " + lng);
+        }
+    })
+
+    // Check upload status to enable or disable the upload button
+
+    // Recursive comparison (example)
+    function arraysEqual(arr1, arr2) {
+        if (arr1 === arr2) return true; // Only works for primitive values
+        if (arr1.length !== arr2.length) return false;
+        for (let i = 0; i < arr1.length; i++) {
+            if (typeof arr1[i] === 'object' && typeof arr2[i] === 'object') {
+            if (!arraysEqual(arr1[i], arr2[i])) return false;
+            } else if (arr1[i] !== arr2[i]) {
+            return false;
+            }
+        }
+        return true;
+    }
+
+    // Websocket functionality
+    $(document).ready(function () {     
+        // Resize window properly
+        $('#map-container').height($(window).height() - $('#nav-bar').height() - $('#status-bar').height() - additionalPixelOffset);      
+
+        // follow robot
+        if (followRobot) {
+            $('#folow-robot-button').removeClass('btn-outline-secondary').addClass('btn-secondary');
+        }
+        // direct robot
+        if (directRobot) {
+            $('#direct-robot-button').removeClass('btn-outline-secondary').addClass('btn-secondary');
+        }
+        if (commandRobot) {
+            $('#command-robot-button').removeClass('btn-outline-secondary').addClass('btn-secondary');
+        }
+        // Get the host and port dynamically
+        var host = window.location.hostname;
+        var port = window.location.port;
+        var url = "/ws/robot/";
+
+        // Choose the appropriate protocol based on whether it's secure (https) or not
+        var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        
+        // WebSocket URL
+        var wsUrlRobot = protocol + '//' + host + (port ? ':' + port : '') + url;
+
+
+        // Use the value in JavaScript
+        console.log('Robot webSocket url:', wsUrlRobot);
+
+        const ws_robot = new ReconnectingWebSocket(wsUrlRobot);
+    
+        ws_robot.onmessage = (event) => {
+            // Clear all data first
+            robotGroup.clearLayers();
+
+            // Parse data
+            let data = JSON.parse(event.data);
+
+            // add layers
+            // Robot
+            robotLocation = data.robot.center;
+            robotHeading = data.robot.orientation;
+            L.polygon(data.robot.contours.latlng, {color: 'transparant', fillColor: 'blue', fillOpacity: 0.5}).addTo(robotGroup);
+            // Hitch layers
+            for (let hitchName in data.hitches) {
+                let hitch = data.hitches[hitchName];
+                L.circleMarker(hitch.state.ball.point.latlng, {color: 'transparant', fillColor: 'white', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
+                if (hitch.activate) {
+                    L.circleMarker(hitch.state.ref.point.latlng, {color: 'transparant', fillColor: 'red', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
+                } else {
+                    L.circleMarker(hitch.state.ref.point.latlng, {color: 'transparant', fillColor: 'white', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
+                }
+            }
+            // Add controller info
+            let currentPoint = data.controller_info.current.latlng;
+            let carrotPoint = data.controller_info.carrot.latlng;
+            let closestPoint = data.controller_info.closest.latlng;
+            L.circleMarker(currentPoint, {color: 'transparant', fillColor: 'green', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
+            L.circleMarker(carrotPoint, {color: 'transparant', fillColor: 'green', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
+            L.circleMarker(closestPoint, {color: 'transparant', fillColor: 'green', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
+
+            let headCurrentPoint = data.controller_info.headCurrent.latlng;
+            let headClosestPoint = data.controller_info.headClosest.latlng;
+            L.circleMarker(headCurrentPoint, {color: 'transparant', fillColor: 'green', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
+            L.circleMarker(headClosestPoint, {color: 'transparant', fillColor: 'green', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup); 
+
+            // sections
+            for (let implementName in data.implements) {
+                let implement = data.implements[implementName];
+                for (let i=0; i < implement.sections.length; i++) {
+                    let section = implement.sections[i];
+                    if (section.active) {
+                        L.polygon(section.latlng, {color: 'red', weight: 1, fillOpacity: 0.5}).addTo(robotGroup);
+                    } else {
+                        L.polygon(section.latlng, {color: 'white', weight: 1, fillOpacity: 0.5}).addTo(robotGroup);
+                    }
+                } 
+            }
+            
+
+            // Follow robot
+            if (followRobot) {
+                // Update position when robot is not in the field of view
+                if (!isCoordinateVisible(robotLocation.latlng[0], robotLocation.latlng[1])) {
+                    map.setView(robotLocation.latlng);
+                }
+            }
+
+            // direct robot
+            if (directRobot) {
+                map.setBearing(robotHeading);
+            }
+
+        };
+
+        // Drive functionality with the arrows during simulation/command mode
+        document.addEventListener('keydown', function(event) {
+            if ($('#simulation-check').is(':checked') && commandRobot) {
+                if (event.keyCode === 37 || event.key === 'ArrowLeft') {
+                    ws_robot.send('{"command": "left", "value": 0.2}');
+                } else if (event.keyCode === 38 || event.key === 'ArrowUp') {
+                    ws_robot.send('{"command": "up", "value": 1.0}');
+                } else if (event.keyCode === 39 || event.key === 'ArrowRight') {
+                    ws_robot.send('{"command": "right", "value": -0.2}');
+                } else if (event.keyCode === 40 || event.key === 'ArrowDown') {
+                    ws_robot.send('{"command": "down", "value": -1.0}');
+                }
+            }
+        });
+
+        document.addEventListener('keyup', function(event) {
+            if ($('#simulation-check').is(':checked') && commandRobot) {
+                if (event.keyCode === 37 || event.key === 'ArrowLeft') {
+                    ws_robot.send('{"command": "left", "value": 0.0}');
+                } else if (event.keyCode === 38 || event.key === 'ArrowUp') {
+                    ws_robot.send('{"command": "up", "value": 0.0}');
+                } else if (event.keyCode === 39 || event.key === 'ArrowRight') {
+                    ws_robot.send('{"command": "right", "value": 0.0}');
+                } else if (event.keyCode === 40 || event.key === 'ArrowDown') {
+                    ws_robot.send('{"command": "down", "value": 0.0}');
+                }
+            }
+        });
+
+        // Button functionality
+        // * Follow robot
+        $('#folow-robot-button').click(function () {
+            followRobot = !followRobot;
+            if (followRobot) {
+                $('#folow-robot-button').removeClass('btn-outline-secondary').addClass('btn-secondary');
+            } else {
+                $('#folow-robot-button').removeClass('btn-secondary').addClass('btn-outline-secondary');
+            }
+            sessionStorage.setItem('follow-robot', followRobot);
+        });
+
+        // * Direct robot
+        $('#direct-robot-button').click(function () {
+            directRobot = !directRobot;
+            if (directRobot) {
+                $('#direct-robot-button').removeClass('btn-outline-secondary').addClass('btn-secondary');
+            } else {
+                $('#direct-robot-button').removeClass('btn-secondary').addClass('btn-outline-secondary');
+                map.setBearing(0);
+            }
+            sessionStorage.setItem('direct-robot', directRobot);
+        });
+
+        $('#command-robot-button').click(function () {
+            commandRobot = !commandRobot;
+            if (commandRobot) {
+                $('#command-robot-button').removeClass('btn-outline-secondary').addClass('btn-secondary');
+            } else {
+                $('#command-robot-button').removeClass('btn-secondary').addClass('btn-outline-secondary');
+            }
+            sessionStorage.setItem('command-robot', commandRobot);
+        });
+
+        // * Edit field
+        $('#edit-field-button').click(function () {
+            editField = !editField;
+            if (editField) {
+                $('#map-container').css('width', '0%')
+                $('#edit-field-button').removeClass('btn-outline-secondary').addClass('btn-secondary');
+                $('#edit-field-container').css('display', 'block');
+            } else {
+                $('#map-container').css('width', '100%')
+                $('#edit-field-button').removeClass('btn-secondary').addClass('btn-outline-secondary');
+                $('#edit-field-container').css('display', 'none');
+                $('#button-upload').attr('disabled', true);
+                clearTrajectPanel();
+                clearPolygonPanel();
+                overlayGroup.clearLayers();
+            }
+        });
+
+        // * Simulation
+        $('#simulation-form').on('change', function(e) {
+            e.preventDefault();
+            fetch("{% url 'core:map_simulation' %}", {
+                method: 'POST',
+                body: new FormData(this)
+            }).then((response) => {
+                if ($('#simulation-check').prop('checked')) {
+                    $('#simulation-factor-form').css('display', 'block');
+                } else {
+                    $('#simulation-factor-form').css('display', 'none');
+                }
+            });
+        });
+
+        $('#increase-simulation-factor-button').click(function () {
+            let newVal = parseFloat($('#simulation-factor').val()) * 2;
+            if (newVal === 0) {
+                newVal = 1.0;
+            }
+            let maxVal = parseFloat($('#simulation-factor').attr('max'));
+            if (newVal > maxVal) {
+                $('#simulation-factor').val(maxVal);
+            } else {
+                $('#simulation-factor').val(newVal);
+            }
+            $('#simulation-factor').trigger('change');
+        });
+
+        $('#decrease-simulation-factor-button').click(function () {
+            let newVal = parseFloat($('#simulation-factor').val()) / 2;
+            if (newVal < 1.0) {
+                newVal = 0.0;
+            }
+            let minVal = parseFloat($('#simulation-factor').attr('min'));
+            if (newVal < minVal) {
+                $('#simulation-factor').val(minVal);
+            } else {
+                $('#simulation-factor').val(newVal);
+            }
+            $('#simulation-factor').trigger('change');
+        });
+
+        $('#simulation-factor-form').on('change', function(e) {
+            e.preventDefault();
+            if (this.checkValidity()) {
+                fetch("{% url 'core:map_simulation_speed' %}", {
+                    method: 'POST',
+                    body: new FormData(this)
+                });
+            }
+        });
+
+        $('#simulation-factor-form').on('submit', function(e) {
+            e.preventDefault();
+            if (this.checkValidity()) {
+                fetch("{% url 'core:map_simulation_speed' %}", {
+                    method: 'POST',
+                    body: new FormData(this)
+                });
+            }
+        });
+
+        // collapsable side panel functionality
+        $('#edit-field-select').on('change', function (e) {
+            editShape = e.target.value;
+            // Clear panels
+            clearPolygonPanel();
+            clearTrajectPanel();
+            overlayGroup.clearLayers();
+
+            if (editShape == '') {
+                $('#edit-traject-shape-panel').css('display', 'none');
+                $('#edit-polygon-shape-panel').css('display', 'none');
+            } else if (editShape == 'traject') {
+                $('#edit-traject-shape-panel').css('display', 'block');
+                $('#edit-polygon-shape-panel').css('display', 'none');
+            } else if (editShape == 'geofence') {
+                $('#edit-polygon-shape-panel').css('display', 'block');
+                $('#edit-traject-shape-panel').css('display', 'none');
+            } else {  // it is a task
+                let taskType = fieldData.tasks[editShape].type;
+                if (taskType == 'continuous' || taskType == 'hitch' || taskType == 'cardan') {
+                    $('#edit-polygon-shape-panel').css('display', 'block');
+                    $('#edit-traject-shape-panel').css('display', 'none');
+                } 
+            }
+        });
+
+        // Upload path
+        $('#map-edit-upload-form').on('submit', function (e) {
+            e.preventDefault();
+
+            // Add the data
+            $('#map-edit-shape-attr').val(editShape);
+            if (editShape == 'traject') {
+                $('#map-edit-geometries-attr').val(JSON.stringify(originalFieldData[editShape].paths));
+            } else {
+                if (editShape === 'geofence') {
+                    $('#map-edit-geometries-attr').val(JSON.stringify(originalFieldData[editShape].rings));
+                } else {  // tasks
+                    $('#map-edit-geometries-attr').val(JSON.stringify(originalFieldData.tasks[editShape].geometry.rings));
+                }
+            }
+
+            this.submit()
+        });
+
+        // window functionality
+        $(window).resize(function() {
+            let newHeight = $(window).height() - $('#nav-bar').height() - $('#status-bar').height() - additionalPixelOffset;
+            $('#map-container').height(newHeight);
+            $('#edit-field-container').height(newHeight);
+            $('#edit-field-container').css('max-height', newHeight);
+        });
+
+        // Close other collapses on click
+        $('.collapse').on('show.bs.collapse', function () {
+            $('.collapse.show').each(function(){
+                if($(this).attr('id') !== $(event.target).attr('id')) {
+                    $(this).collapse('hide');
+                }
+            });
+        });
+    });
+</script>
+
+{% endblock %}

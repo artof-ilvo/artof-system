@@ -1,0 +1,62 @@
+<div class="collapse form-inline mt-2 w-100" id="collapse-{{ base_id }}-drive">
+    <button id="button-a-{{ base_id }}" class="btn btn-outline-secondary" style="width: 5em;">A</button>
+    <button id="button-m-{{ base_id }}" class="btn btn-outline-secondary ms-2" style="width: 5em;" disabled>/</button>
+    <button id="button-b-{{ base_id }}" class="btn btn-outline-secondary ms-2" style="width: 5em;" disabled>B</button>
+    <button id="check-{{ base_id }}" class="btn btn-outline-success ms-auto" disabled>{% include "icons/check2.html" %}</button>
+</div>
+
+<script>
+    $("#button-a-{{ base_id }}").click(function() {
+        driveInGroup.clearLayers();
+        overlayGroup.clearLayers();
+
+        if ('{{ base_id }}' === 'traject') {
+            fieldData.traject.latlng = [[robotLocation.latlng]];
+            fieldData.traject.paths = [[robotLocation.xy]];
+        } else if ('{{ base_id }}' === 'geofence') {
+            fieldData.geofence.latlng = [[robotLocation.latlng]];
+            fieldData.geofence.rings = [[robotLocation.xy]];
+        }
+
+        drawDrivInLine(fieldData.traject.latlng[0]);
+        $('#button-m-{{ base_id }}').prop("disabled", false);
+        $('#button-b-{{ base_id }}').prop("disabled", false);
+    });
+
+    $("#button-m-{{ base_id }}").click(function() {
+        if ('{{ base_id }}' === 'traject') {
+            fieldData.traject.latlng[0].push(robotLocation.latlng);
+            fieldData.traject.paths[0].push(robotLocation.xy);
+        } else if ('{{ base_id }}' === 'geofence') {
+            fieldData.geofence.latlng[0].push(robotLocation.latlng);
+            fieldData.geofence.rings[0].push(robotLocation.xy);
+        }
+
+        drawDrivInLine(fieldData.traject.latlng[0]);
+        $("#check-{{ base_id }}").prop("disabled", false);
+    });
+
+    $("#button-b-{{ base_id }}").click(function() {
+        fieldData.traject.latlng[0].push(robotLocation.latlng);
+        fieldData.traject.paths[0].push(robotLocation.xy);
+        drawDrivInLine(fieldData.traject.latlng[0]);
+        $("#check-{{ base_id }}").prop("disabled", false);
+        $('#button-m-{{ base_id }}').prop("disabled", true);
+        $('#button-b-{{ base_id }}').prop("disabled", true);
+        driveInGroup.clearLayers();
+        if ('{{ base_id }}' === 'traject') {
+            drawTrajectOverlay(fieldData.traject.latlng[0]);
+            acknowledgeTraject();
+        }
+    });
+
+    function clearDriveIn(name="{{ base_id }}") {
+        if (name == "{{ base_id }}") {
+            $('#button-a-{{ base_id }}').prop("disabled", false);
+            $('#button-m-{{ base_id }}').prop("disabled", true);
+            $('#button-b-{{ base_id }}').prop("disabled", true);
+            $("#check-{{ base_id }}").prop("disabled", true);
+            driveInGroup.clearLayers();
+        }
+    }
+</script>

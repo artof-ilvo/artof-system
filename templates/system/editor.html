@@ -1,0 +1,128 @@
+{% extends "system/base.html" %} {% block title %} Editor {% endblock %}
+{% block content %}
+
+<form method="POST" action="edit">
+    {% csrf_token %}
+    <div class="editor-button-container">
+        <button class="btn btn-light" onclick="goBack()" style="float: left">
+            {% include "icons/arrow-left-short.html" %}
+        </button>
+        <input type="text" name="name" value="{{ Name }}" id="editor-job-name">
+    </div>
+    <div id="editor-container">
+        <div id="line-numbers-container">
+            <div id="line-numbers"></div>
+        </div>
+        <textarea name="data" id="json-editor" oninput="updateLineNumbers()" onscroll="updateLineNumbers()">{{ Json }}</textarea>
+    </div>
+    <button id="submitBtn" type="submit" class="btn btn-success" style="float: right; margin-right: 10px;" value="getJSON();">
+        {% include "icons/box-arrow-in-up.html" %} Submit
+    </button>
+</form>
+<button id="formatBtn" class="btn btn-primary" onclick="formatJSON()" style="float: right; margin-right: 10px;">
+    {% include "icons/json.html" %} Format
+</button>
+
+<script type="text/javascript">
+    // Initialize line numbers
+    $(document).ready(function() {
+        formatJSON();
+    })
+
+    $('#json-editor').on('input', function() {
+        updateLineNumbers();
+    });
+
+    function updateLineNumbers() {
+        const textarea = document.getElementById('json-editor');
+        const lineNumbersContainer = document.getElementById('line-numbers-container');
+        const lineNumbers = document.getElementById('line-numbers');
+        const lines = textarea.value.split('\n');
+        lineNumbers.innerHTML = '';
+        for (let i = 0; i < lines.length; i++) {
+            lineNumbers.innerHTML += '<div>' + (i + 1) + '</div>';
+        }
+
+        // Adjust visibility based on the scroll position
+        lineNumbersContainer.scrollTop = textarea.scrollTop;
+        // lineNumbersContainer.style.visibility = (textarea.scrollHeight > textarea.clientHeight) ? 'visible' : 'hidden';
+    }
+
+    function getJSON() {
+        const jsonString = $('#json-editor').val();
+        const jsonObject = JSON.parse(jsonString);
+        return jsonObject;
+    }
+
+    function formatJSON() {
+        console.log("Format json");
+        try {
+            const jsonObject = getJSON();
+            const formattedJSON = JSON.stringify(jsonObject, null, 2);
+            $('#json-editor').val(formattedJSON);
+            updateLineNumbers();
+        } catch (error) {
+            alert('Invalid JSON: ' + error.message);
+        }
+    }
+
+    function goBack() {
+        // Go back one step in the browser history
+        window.history.go(-1);
+    }
+</script>
+
+<style>
+
+#editor-container {
+    display: flex;
+    margin: 10px;
+    height: calc(100vh - 12em);
+}
+
+#line-numbers-container {
+    width: 3em;
+    height: 100%;
+    overflow-y: hidden;
+    padding: 0 10px; /* Padding for top/bottom and left/right */
+    text-align: right;
+    background-color: var(--color-light-shade);
+    border-radius: 5px 0 0 5px; /* top-left | top-right | bottom-right | bottom-left */
+}
+
+#line-numbers {
+    counter-reset: line;
+    display: inline-block;
+}
+
+#json-editor {
+    width: 100%;
+    height: 100%;
+    font-family: 'Courier New', monospace;
+    resize: none;
+    background-color: var(--color-light);
+    border: none;
+    border-radius: 0 5px 5px 0; /* top-left | top-right | bottom-right | bottom-left */
+}
+
+#json-editor:focus {
+    outline: none !important;
+}
+
+#editor-job-name {
+    padding-top: 5px;
+    margin-left: 10px;
+    border: none;
+}
+
+#editor-job-name:focus {
+    outline: none !important;
+}
+
+.editor-button-container {
+    width: 100%;
+}
+
+</style>
+
+{% endblock %}
