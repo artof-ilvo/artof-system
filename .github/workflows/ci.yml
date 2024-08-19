@@ -9,7 +9,7 @@ on:
 jobs:
 
   stage-dockerhub:
-    name: Push artof-system to Docker Hub
+    name: "Push artof-system to Docker Hub (tag: dev)"
     runs-on: ubuntu-latest
     environment:
       name: staging
@@ -38,7 +38,7 @@ jobs:
 
 
   deploy-dockerhub:
-    name: Push artof-system to Docker Hub
+    name: "Push artof-system to Docker Hub (tags: ${{ vars.SYSTEM_TAG }} and latest)"
     runs-on: ubuntu-latest
     environment:
       name: production
