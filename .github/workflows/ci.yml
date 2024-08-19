@@ -28,17 +28,10 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.DOCKER_HUB_REGISTRY }}/${{ env.SYSTEM_IMAGE_NAME}}:${{ env.SYSTEM_TAG }}
-
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ env.DOCKER_HUB_REGISTRY }}/${{ env.SYSTEM_IMAGE_NAME}}:${{ env.SYSTEM_TAG }}
 
