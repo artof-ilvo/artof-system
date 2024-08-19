@@ -1,4 +1,4 @@
-# ARTOF python utils
+# ARTOF system addon
 
 ## Introduction
 

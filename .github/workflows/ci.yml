@@ -28,10 +28,17 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push version
         uses: docker/build-push-action@v5
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ vars.DOCKER_HUB_REGISTRY }}/${{ vars.SYSTEM_IMAGE_NAME}}:${{ vars.SYSTEM_TAG }}
+
+      - name: Build and push latest
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ vars.DOCKER_HUB_REGISTRY }}/${{ vars.SYSTEM_IMAGE_NAME}}:latest
 
