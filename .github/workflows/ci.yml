@@ -38,7 +38,7 @@ jobs:
 
 
   deploy-dockerhub:
-    name: "Push artof-system to Docker Hub (tags: ${{ vars.SYSTEM_TAG }} and latest)"
+    name: "Push artof-system to Docker Hub (tags: version and latest)"
     runs-on: ubuntu-latest
     environment:
       name: production
