@@ -33,5 +33,5 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.DOCKER_HUB_REGISTRY }}/${{ env.SYSTEM_IMAGE_NAME}}:${{ env.SYSTEM_TAG }}
+          tags: ${{ vars.DOCKER_HUB_REGISTRY }}/${{ vars.SYSTEM_IMAGE_NAME}}:${{ vars.SYSTEM_TAG }}
 
