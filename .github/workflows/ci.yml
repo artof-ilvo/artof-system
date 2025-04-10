@@ -34,7 +34,7 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ vars.DOCKER_HUB_REGISTRY }}/${{ vars.SYSTEM_IMAGE_NAME}}:dev
+          tags: ${{ vars.DOCKER_HUB_REGISTRY }}/${{ vars.DOCKER_IMAGE_NAME}}:dev
 
 
   deploy-dockerhub:
@@ -63,12 +63,12 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ vars.DOCKER_HUB_REGISTRY }}/${{ vars.SYSTEM_IMAGE_NAME}}:${{ vars.SYSTEM_TAG }}
+          tags: ${{ vars.DOCKER_HUB_REGISTRY }}/${{ vars.DOCKER_IMAGE_NAME}}:${{ vars.DOCKER_IMAGE_TAG }}
 
       - name: Build and push latest
         uses: docker/build-push-action@v5
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ vars.DOCKER_HUB_REGISTRY }}/${{ vars.SYSTEM_IMAGE_NAME}}:latest
+          tags: ${{ vars.DOCKER_HUB_REGISTRY }}/${{ vars.DOCKER_IMAGE_NAME}}:latest
 
