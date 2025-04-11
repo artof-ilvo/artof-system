@@ -47,6 +47,18 @@ PORT=8000
 }
 ```
 
+## Create test image (locally)
+```
+docker build .
+docker run -d \
+  --name artof-system \
+  --restart=on-failure:3 \
+  --network=host \
+  -v /var/lib/ilvo:/var/lib/ilvo \
+  axelwillekens/artof-system
+```
+
+
 ## Licence
 
 This project is under the ``ILVO LICENCE``.
