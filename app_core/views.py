@@ -35,7 +35,9 @@ def notification_acknowledge(request):
     return HttpResponse()
 
 def navigation_state(request):
-    robot_manager.set_navigation_state(request.POST.get("state"))
+    new_state = request.POST.get("state")
+    if new_state:
+        robot_manager.set_navigation_state(new_state)
     return HttpResponse()
 
 # Field

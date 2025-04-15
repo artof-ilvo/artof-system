@@ -137,6 +137,8 @@
         var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         
         // WebSocket URL
+        var currentState = 'normal';
+        var stateUpdateTime = Date.now();
         var wsUrlStatus = protocol + '//' + host + (port ? ':' + port : '') + url;
   
   
@@ -160,6 +162,22 @@
             $('#heart-label').css("color", "red");
           } else {
             $('#heart-label').css("color", "white");
+          }
+
+          // update state
+          let now = Date.now();
+          if (now - stateUpdateTime > 500) {
+            if (currentState !== data.current_state) {
+              const targetId = `radio-state-${state}`;
+              $('input[name="state"]').each(function() {
+                if (this.id !== targetId) {
+                  $(this).prop('checked', false);
+                  $(`label[for="${this.id}"]`).removeClass('active');
+                }
+              });
+              currentState = data.current_state;
+            }
+            stateUpdateTime = now;
           }
 
           if (data.notification !== "-") {
