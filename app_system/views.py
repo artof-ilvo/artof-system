@@ -3,8 +3,8 @@ from django.http import HttpResponse, JsonResponse
 from django.urls import reverse
 from .utils.job import AddonManager, ProcessManager
 import artof_utils.paths as paths
-from artof_utils.redis_instance import redis_server
-from artof_utils.implement import implement_manager
+from artof_utils.redis_manager import redis_manager
+from artof_utils.implement_manager import implement_manager
 from artof_utils.schemas.implement import Implement
 
 from os import path
@@ -141,12 +141,12 @@ def delete_addon(request):
 
 # Monitor
 def monitor(request):
-    return render(request, "system/monitor.html", context={"variables": redis_server.variables})
+    return render(request, "system/monitor.html", context={"variables": redis_manager.variables})
 
 def monitor_edit(request):
     body_unicode = request.body.decode('utf-8')
     body = json.loads(body_unicode)
-    redis_server.set_value(body["name"], body["value"])
+    redis_manager.set_value(body["name"], body["value"])
     return JsonResponse({})
 
 

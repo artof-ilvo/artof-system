@@ -1,4 +1,4 @@
-from artof_utils.redis_instance import redis_server
+from artof_utils.redis_manager import redis_manager
 from .format_time import format_datetime
 from enum import Enum
 import json
@@ -12,14 +12,14 @@ class JobType(Enum):
 class JobManager:
     def __init__(self, job_type: JobType):
         self.job_type = job_type
-        self.redis_json = redis_server.get_json_value("system")
+        self.redis_json = redis_manager.get_json_value("system")
         self.jobs = self.redis_json[self.job_type.value]
 
     def get(self):
         return self.jobs
 
     def wait_for_confirmation(self, name, variable: str, value: bool):
-        system = redis_server.get_json_value("system")
+        system = redis_manager.get_json_value("system")
         for job in system[self.job_type.value]:
             if job["Name"] == name:
                 if job[variable] == value:
@@ -28,34 +28,34 @@ class JobManager:
         return False
 
     def start(self, name):
-        system = redis_server.get_json_value("system")
+        system = redis_manager.get_json_value("system")
         for job in system[self.job_type.value]:
             if job["Name"] == name:
                 job["StartCommand"] = True
                 break
-        redis_server.set_json_value("system", system)
-        redis_server.set_value("pc.execution.notification", "Job %s has started." % name)
+        redis_manager.set_json_value("system", system)
+        redis_manager.set_value("pc.execution.notification", "Job %s has started." % name)
 
     def stop(self, name):
-        system = redis_server.get_json_value("system")
+        system = redis_manager.get_json_value("system")
         for process in system[self.job_type.value]:
             if process["Name"] == name:
                 process["StopCommand"] = True
                 break
-        redis_server.set_json_value("system", system)
-        redis_server.set_value("pc.execution.notification", "Job %s has stopped." % name)
+        redis_manager.set_json_value("system", system)
+        redis_manager.set_value("pc.execution.notification", "Job %s has stopped." % name)
 
     def update(self, name):
-        system = redis_server.get_json_value("system")
+        system = redis_manager.get_json_value("system")
         for process in system[self.job_type.value]:
             if process["Name"] == name:
                 process["UpdateCommand"] = True
                 break
-        redis_server.set_json_value("system", system)
-        redis_server.set_value("pc.execution.notification", "Job %s was updated. Give some time for the changes to apply." % name)
+        redis_manager.set_json_value("system", system)
+        redis_manager.set_value("pc.execution.notification", "Job %s was updated. Give some time for the changes to apply." % name)
 
     def edit(self, name, new_value: dict):
-        system = redis_server.get_json_value("system")
+        system = redis_manager.get_json_value("system")
         idx = -1
         for i in range(len(system[self.job_type.value])):
             process = system[self.job_type.value][i]
@@ -68,10 +68,10 @@ class JobManager:
         else:
             system[self.job_type.value].append(new_value)
 
-        redis_server.set_json_value("system", system)
+        redis_manager.set_json_value("system", system)
 
     def delete(self, name):
-        system = redis_server.get_json_value("system")
+        system = redis_manager.get_json_value("system")
         idx = -1
         for i in range(len(system[self.job_type.value])):
             process = system[self.job_type.value][i]
@@ -82,7 +82,7 @@ class JobManager:
         if idx > -1:
             del system[self.job_type.value][idx]
 
-        redis_server.set_json_value("system", system)
+        redis_manager.set_json_value("system", system)
 
 
 class ProcessManager(JobManager):

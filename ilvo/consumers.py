@@ -1,6 +1,6 @@
 import json
-from artof_utils.redis_instance import redis_server
-from artof_utils.robot import robot_manager
+from artof_utils.redis_manager import redis_manager
+from artof_utils.robot_manager import robot_manager
 
 import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
@@ -41,7 +41,7 @@ class CustomConsumer(AsyncWebsocketConsumer):
 
 class RedisConsumer(CustomConsumer):
     def get_data(self):
-        return {'variables': redis_server.get_all_values() }
+        return {'variables': redis_manager.get_all_values() }
 
 class StatusConsumer(CustomConsumer):    
     def get_data(self):

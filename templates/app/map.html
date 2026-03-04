@@ -174,54 +174,33 @@
     // Adding layer to the map
     map.addLayer(layer);
 
-    // Draw field
+    var fieldData = {{ field_json | safe }};
+    var originalFieldData = {{ field_json | safe }};
+    var backupFieldData = {{ field_json | safe }};
+
     // Draw geofence
-    var geofenceGroup = L.layerGroup();
-    var geofenceCoordinates = {{ geofence_geometry.latlng }};
-    var geofence = L.polygon(geofenceCoordinates, {
-        color: 'red',
-        fill: false,
-    }).addTo(geofenceGroup);
-    geofenceGroup.addTo(map);
-
-    // Draw tasks
-    var taskGroup = L.layerGroup();
-    {% for task in task_geometries %}
-        var taskCoordinates = {{ task.geometry.latlng }};
-        {% if task.type == 'continuous' %}
-            var task{{ task.name}} = L.polygon(taskCoordinates, {color: 'blue', weight: 2, fillOpacity: 0.2}).addTo(taskGroup);
-        {% elif task.type == 'cardan' %}
-            var task{{ task.name}} = L.polygon(taskCoordinates, {color: 'yellow', weight: 2, fillOpacity: 0.2}).addTo(taskGroup);
-        {% elif task.type == 'hitch' %}
-            var task{{ task.name}} = L.polygon(taskCoordinates, {color: 'green', weight: 2, fillOpacity: 0.2}).addTo(taskGroup);
-        {% elif task.type == 'discrete' %}
-            for (let i = 0; i < taskCoordinates.length; i++) {
-                var task{{ task.name}} = L.circleMarker(taskCoordinates[i], {color: 'blue', weight: 2, fillOpacity: 0.2, radius: 3}).addTo(taskGroup);
-            }
-        {% elif task.type == 'intermittent' %}
-            for (let i = 0; i < taskCoordinates.length; i++) {
-                var task{{ task.name}} = L.circleMarker(taskCoordinates[i], {color: 'blue', weight: 2, fillOpacity: 0.2, radius: 3}).addTo(taskGroup);
-            }
-        {% endif %}
-    {% endfor %}
-
-    taskGroup.addTo(map);
+    if (fieldData.geofence && fieldData.geofence.empty === false) {
+        L.geoJSON(fieldData.geofence.geojson, {
+            style: { color: 'red', weight: 2, fillOpacity: 0.2 }
+        }).addTo(map);
+    }
 
     // Draw traject
-    var trajectGroup = L.layerGroup();
-    var trajectCornerCoordinates = {{ traject_geometry.latlng.0 }};
-    var traject = L.polyline(trajectCornerCoordinates, {
-        color: 'red',
-        weight: 2,
-        fillOpacity: 0.5,
-        dashArray: '5, 10' 
-    }).addTo(trajectGroup);
-    var decorator = L.polylineDecorator(traject, {
-        patterns: [
-            {offset: 25, repeat: 50, symbol: L.Symbol.arrowHead({pixelSize: 10, polygon: true, pathOptions: {color: 'red', fillOpacity: 0, weight: 2}})}
-        ]
-    }).addTo(trajectGroup);
-    trajectGroup.addTo(map);
+    if (fieldData.traject && fieldData.traject.empty === false) {
+        L.geoJSON(fieldData.traject.geojson, {
+            style: { color: 'blue', weight: 3 }
+        }).addTo(map);
+    }
+
+    // Draw tasks
+    for (let taskName in fieldData.tasks) {
+        let task = fieldData.tasks[taskName];
+       if (task && task.geometry && task.geometry.empty === false) {
+            L.geoJSON(task.geometry.geojson, {
+               circle: { radius: 5, fillColor: 'green', fillOpacity: 0.8 } 
+           }).addTo(map);
+      }
+    }
 
     // Draw robot
     var robotGroup = L.layerGroup().addTo(map);
@@ -237,9 +216,6 @@
     var editShape = '';
 
     var additionalPixelOffset = 30;
-    var fieldData = JSON.parse('{{ field_json | safe }}');
-    var originalFieldData = JSON.parse('{{ field_json | safe }}');
-    var backupFieldData = JSON.parse('{{ field_json | safe }}');
 
     // Function to check if a coordinate is still visible on the map
     function isCoordinateVisible(latitude, longitude) {
@@ -565,19 +541,18 @@
         $('#map-edit-upload-form').on('submit', function (e) {
             e.preventDefault();
 
-            // Add the data
             $('#map-edit-shape-attr').val(editShape);
-            if (editShape == 'traject') {
-                $('#map-edit-geometries-attr').val(JSON.stringify(originalFieldData[editShape].paths));
+            var geometryData;
+            if (editShape === 'traject') {
+                geometryData = fieldData.traject;
+            } else if (editShape === 'geofence') {
+                geometryData = fieldData.geofence;
             } else {
-                if (editShape === 'geofence') {
-                    $('#map-edit-geometries-attr').val(JSON.stringify(originalFieldData[editShape].rings));
-                } else {  // tasks
-                    $('#map-edit-geometries-attr').val(JSON.stringify(originalFieldData.tasks[editShape].geometry.rings));
-                }
+                geometryData = fieldData.tasks[editShape] ? fieldData.tasks[editShape].geometry : { empty: true };
             }
+            $('#map-edit-geometries-attr').val(JSON.stringify(geometryData));
 
-            this.submit()
+            this.submit();
         });
 
         // window functionality

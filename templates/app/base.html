@@ -168,7 +168,7 @@
           let now = Date.now();
           if (now - stateUpdateTime > 500) {
             if (currentState !== data.current_state) {
-              const targetId = `radio-state-${state}`;
+              const targetId = `radio-state-${data.current_state}`;
               $('input[name="state"]').each(function() {
                 if (this.id !== targetId) {
                   $(this).prop('checked', false);

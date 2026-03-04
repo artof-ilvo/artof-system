@@ -9,8 +9,8 @@
     <label>Keep the shape file from the system. Press check.</label>
 </div>
 <div id="file-{{ base_id }}" style="display: none;">
-    <label class="mb-1">Input the shape files (.shp, .shx, .dbf, .prj, .cpg) and press check when ready.</label>
-    <input type="file" class="form-control" multiple="" min_num="3" max_num="6" accept=".shp, .shx, .dbf, .prj, .cpg" max_file_size="5242880" id="file-input-{{ base_id }}">
+    <label class="mb-1">Input the shape files (.geojson) and press check when ready.</label>
+    <input type="file" class="form-control" multiple="" min_num="1" max_num="1" accept=".geojson, .json" max_file_size="5242880" id="file-input-{{ base_id }}">
 </div>
 <div id="draw-{{ base_id }}" style="display: none;">
     <label>Draw on the map and press check when ready.</label>
@@ -26,27 +26,15 @@ $(document).ready(function() {
 
         let inputMode = $('input[name="{{ base_id }}"]:checked').val();
 
-        if (inputMode === "draw") {
-            let features = getAllDrawnFeatures();
-            if (features.length === 0) {
-                showNotification("Please draw a line on the map. The number of drawn features is zero.");
-                return;
-            }
-
-            let data;
-            if ('{{ base_id }}' === 'traject') {
-                data = fieldData.traject;
-            } else if ('{{ base_id }}' === 'geofence') {
-                data = fieldData.geofence;
-            } else {
-                data = fieldData.tasks['{{ base_id }}'].geometry;
-            }
-
-            if (data !== undefined && features.length > 0) {
-                data.empty = false;
-                data.latlng = features;
-                updateLayerGroup(data, '{{ base_id }}');
-            }
+        if (inputMode === 'draw') {
+            if (drawnItems.getLayers().length === 0) return;
+            
+            var formattedData = {
+                empty: false,
+                geojson: drawnItems.toGeoJSON() 
+            };
+            
+            updateLayerGroup(formattedData, "{{ base_id }}");
         }
 
         // upload form data
@@ -88,46 +76,65 @@ $(document).ready(function() {
             if (selectedValue === "draw") {
                 // Add shape to editableFeatures
                 clearDrawnFeatures();
-                let layer;
-                if (editableShape.type === 'circlemarker') {
-                    layer = L.circleMarker(editableShape.data);
-                } else if (editableShape.type === 'polyline') {
-                    layer = L.polyline(editableShape.data);
-                } else if (editableShape.type === 'polygon') {
-                    layer = L.polygon(editableShape.data);
-                }
-                if (layer) {
-                    drawnItems.addLayer(layer);
-                }
+                if (editableShape.data) {
+                    let tempLayer = L.geoJSON(editableShape.data, {
+                        pointToLayer: function(feature, latlng) {
+                            return L.circleMarker(latlng);
+                        }
+                    });
+                    
+                    tempLayer.eachLayer(function(layer) {
+                        drawnItems.addLayer(layer);
+                    });
                 
-            } else {
+                } else {
                 clearDrawnFeatures();
-            }    
+                }    
+            }
         }
     });
 
     // Add event listener to file input
-    $('#file-input-{{ base_id }}').change(function() {
-        var files = $(this)[0].files;
+$('#file-input-{{ base_id }}').change(function() {
+    var files = $(this)[0].files;
+    if (files.length === 0) return;
 
-        var formData = new FormData();
-        for (var i = 0; i < files.length; i++) {
-            formData.append('files', files[i]); // Append files without a name
-        }
+    var formData = new FormData();
+    for (var i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+    }
 
-        fetch("{% url 'core:field_edit_shapefile' %}", {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}'
+    console.log("Bestand uploaden voor: {{ base_id }}");
+
+    fetch("{% url 'core:field_edit_geojson' %}", {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        var tempLayer = L.geoJSON(data);
+        var layers = tempLayer.getLayers(); 
+
+        if (layers.length > 0) {
+            var geometry = layers[0];
+
+            var formattedData = {
+                empty: false,
+                geojson: geometry.toGeoJSON() 
+            };
+
+            try {
+                updateLayerGroup(formattedData, "{{ base_id }}");
+            } catch (err) {
+                console.error("Fout tijdens het updaten van de kaart: ", err);
             }
-        }).then(response => response.json()).then(data => {
-            updateLayerGroup(data, "{{ base_id }}");
-        }).catch(error => {
-            console.log('Error:', error);
-        })
-    });
-
+        } else {
+            console.warn("Geen geldige vormen gevonden in de upload.");
+        }
+    })
+    .catch(error => console.error('Upload Error:', error));
+});
 });
 
 

@@ -1,15 +1,18 @@
+import os
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.http import HttpResponse, JsonResponse
-from artof_utils.robot import robot_manager
-from artof_utils.schemas.field import Fields, Field
-from artof_utils.schemas.task import TaskInfo
-from artof_utils.helpers import traject
-from artof_utils.helpers import polygon
-from artof_utils.helpers import task
-from artof_utils.helpers import shape as shp
+from artof_utils.robot_manager import robot_manager
+from artof_utils.field_manager import FieldManager
+from app_core.utils.fields import Fields
+from artof_utils.schemas.task import Task
+from artof_utils.gis import traject
+from artof_utils.gis import polygon
+from artof_utils.gis import task
+from artof_utils.gis import shape as shp
 from artof_utils.schemas.settings import HitchName
 import artof_utils.paths as paths
+from app_core.utils.geojson import GeoJson, GeomType
 from .forms.multifileinput import FileFieldForm
 from glob import glob
 from os import path, walk
@@ -80,112 +83,160 @@ def delete_new_field(request):
     fields.delete_field(field_name)
     return redirect(reverse('core:field'))
 
-# Field Edit
-def field_edit_shapefile(request):
-    if request.method == 'POST':
-        form = FileFieldForm(request.POST, request.FILES, prefix=None)
-        if form.is_valid():
-            shp_file = form.load_shapefile()
-            context = shp_file.context
-            if context:
-                return JsonResponse(shp_file.context)
-            else:
-                return JsonResponse({'status': 'error', 'message': 'Invalid shapefile'}, status=404)
+def field_duplicate(request):
+    fields = Fields()
+    fields.duplicate_field(request.GET.get("name"))
+    return redirect(reverse('core:field'))
 
-    return JsonResponse({'status': 'error', 'message': 'No shapefile'}, status=404)
+# Field Edit
+def field_edit_geojson(request):
+    if request.method == 'POST':
+        form = FileFieldForm(request.POST, request.FILES)
+        if form.is_valid():
+            geo_file = form.load_geojson()
+            if geo_file and geo_file.context:
+                return JsonResponse(geo_file.context)
+            else:
+                return JsonResponse({'status': 'error', 'message': 'Invalid geojson file'}, status=404)
+
+    return JsonResponse({'status': 'error', 'message': 'No geojson file'}, status=404)
 
 def field_edit_context(field):
     field_context = field.context
 
     field_context['field_name'] = field.name
+    field_context['field_json'] = field.json
     field_context['hitch_choices'] = [(hitch.name.value, hitch.name.value) for hitch in robot_manager.hitches.hitches]
     field_context['implement_choices'] = task.get_implement_choices()
     field_context['type_choices'] = task.get_type_choices()
+    if 'tasks' in field_context:
+        field_context['task_geometries'] = list(field_context['tasks'].values())
+    else:
+        field_context['task_geometries'] = []
 
     return field_context
 
 
 def field_edit_task_add(request):
     field_name = request.GET.get('field_name')
-    field = Field(field_name)
+    geo_file = GeoJson(os.path.join(paths.fields, field_name), "data")  
+    field = FieldManager(field_name, geo_file.gdf)
     field.add_new_task()
-    return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
+    geo_file.gdf = field.gdf
+    geo_file.save()
+    #return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
+    return redirect(f"{reverse('core:field_edit')}?name={field_name}")
 
 def field_edit_task_remove(request):
     field_name = request.GET.get('field_name')
+    geo_file = GeoJson(os.path.join(paths.fields, field_name), "data") 
     task_name = request.GET.get('task_name')
-    field = Field(field_name)
+    field = FieldManager(field_name, geo_file.gdf)
     field.remove_task(task_name)
+    geo_file.gdf = field.gdf
+    geo_file.save()
     return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
 
 
 def field_edit_name(request):
     original_field_name = request.POST.get('original')
     new_field_name = request.POST.get('new')
-    field = Field(original_field_name)
-
-    if original_field_name != new_field_name:
-        field = field.rename(new_field_name)
-
-    return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
+    Fields().rename_field(original_field_name, new_field_name)
+    geo_file = GeoJson(os.path.join(paths.fields, new_field_name), "data")  
+    field = FieldManager(new_field_name, geo_file.gdf)
+    field.rename(new_field_name)
+    geo_file.gdf = field.gdf
+    geo_file.save()
+    #return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
+    #return JsonResponse({'status': 'success'})
+    return redirect(reverse('core:field_edit') + '?name=' + new_field_name)
 
 def field_edit_geofence(request):
     field_name = request.POST.get('name')
-    field = Field(field_name)
+    geo_file = GeoJson(os.path.join(paths.fields, field_name), "data")
+    field = FieldManager(field_name, geo_file.gdf)
 
     data = json.loads(request.POST.get('data'))
-    input_mode = request.POST.get('input_mode')
-
-    if data['empty'] or input_mode == 'drive':
-        latlng = [[0, 0], [0.0, 10.0], [10.0, 10.0], [10.0, 0.0], [0.0, 0.0]]
-        field.update_traject(latlng, epsg=32631)
+    
+    if data['empty'] or request.POST.get('input_mode') == 'drive':
+        geom = GeomType.Polygon([(0, 0), (0, 10), (10, 10), (10, 0), (0, 0)])
+        field.update_geofence(geom)
     else:
-        latlng = data['latlng']
-        field.update_geofence(latlng, epsg=4326)
+        geom_obj = extract_geojson(data)
+        coords = geom_obj['coordinates']
+        geoms = GeoJson.to_shapely(coords, type=GeomType.POLYGON)
+        field.update_geofence(geoms[0])
+
+    geo_file.gdf = field.gdf
+    geo_file.save()
 
     return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
 
-
 def field_edit_traject(request):
     field_name = request.POST.get('name')
-    field = Field(field_name)
+    geo_file = GeoJson(os.path.join(paths.fields, field_name), "data")
+    field = FieldManager(field_name, geo_file.gdf)
 
     data = json.loads(request.POST.get('data'))
-    input_mode = request.POST.get('input_mode')
-
-    if data['empty'] or input_mode == 'drive':
-        latlng = [[0, 0], [10.0, 10.0]]
-        field.update_traject(latlng, epsg=32631)
+    
+    if data['empty'] or request.POST.get('input_mode') == 'drive':
+        geom = GeomType.LineString([(0, 0), (10, 10)])
+        field.update_traject(geom)
     else:
-        latlng = data['latlng']
-        field.update_traject(latlng, epsg=4326)
+        geom_obj = extract_geojson(data)
+        coords = geom_obj['coordinates']
+        geoms = GeoJson.to_shapely(coords, type=GeomType.LINESTRING)
+        field.update_traject(geoms[0])
+
+    geo_file.gdf = field.gdf
+    geo_file.save()
 
     return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
 
 
 def field_edit_task(request):
     field_name = request.POST.get('name')
-    field = Field(field_name)
+    geo_file = GeoJson(os.path.join(paths.fields, field_name), "data")
+    field = FieldManager(field_name, geo_file.gdf)
 
     task = json.loads(request.POST.get('data'))
     input_mode = request.POST.get('input_mode')
 
-    geometries = None if input_mode == 'original' else task['geometry']['latlng']
-    task_info = TaskInfo(name=task['name'], type=task['type'], implement='' if not task['implement'] else task['implement'], hitch=task['hitch'])
-    field.update_task(task['name'], geometries, task_info, epsg=4326)
+    geometries = None
+    if input_mode != 'original':
+        task_geom_data = task.get('geometry', {})
+        
+        if not task_geom_data.get('empty', True) and 'geojson' in task_geom_data:
+            geojson = task_geom_data['geojson']
+            if geojson['type'] == 'FeatureCollection':
+                coords = [feat['geometry']['coordinates'] for feat in geojson['features']]
+            else:
+                coords = geojson['geometry']['coordinates']
+
+            if task['type'] in ['cardan', 'continuous', 'hitch']:
+                geom_type = GeomType.POLYGON
+            else:
+                geom_type = GeomType.MULTIPOINT 
+            geometries = GeoJson.to_shapely(coords, type=geom_type)
+
+    task_info = Task(name=task['name'], type=task['type'], implement='' if not task['implement'] else task['implement'], hitch=task['hitch'])
+    
+    field.update_task(task['name'], geometries, task_info)
+    
+    geo_file.gdf = field.gdf
+    geo_file.save()
     
     return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
 
 
 def field_edit(request):
-    field = Field(request.GET.get('name'))
+    field_name = request.GET.get('name')
+    if field_name == "New":
+        Fields().create_field(field_name)
+    geo_file = GeoJson(os.path.join(paths.fields, field_name), "data")
+    field = FieldManager(field_name, geo_file.gdf)
     return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
-      
 
-def field_duplicate(request):
-    fields = Fields()
-    fields.duplicate_field(request.GET.get("name"))
-    return redirect(reverse('core:field'))
 
 # Settings
 def settings(request):
@@ -256,14 +307,17 @@ def update_hitch_settings(request):
 
 # Map
 def map_context():
-    robot_manager.load_field()
-    map_context = robot_manager.field.context
-    map_context['simulation'] = {
+    field_name = Fields.get_current_field_name()  
+    geo_file = GeoJson(os.path.join(paths.fields, field_name), "data")
+    robot_manager.load_field(geo_file.gdf)
+    ctx = robot_manager.field.context  
+    ctx['field_json'] = robot_manager.field.json
+    ctx['simulation'] = {
         'active': robot_manager.get_simulation_mode(),
         'speed_factor': int(robot_manager.get_simulation_speed_factor())
     }
-
-    return map_context
+    ctx['task_geometries'] = list(ctx.get('tasks', {}).values())
+    return ctx
 
 
 def map(request):
@@ -284,16 +338,45 @@ def map_simulation_position(request):
 
 def map_edit_shape(request):
     shape = request.POST.get('shape')
-    geometries = json.loads(request.POST.get('geometries'))
+    geometries_str = request.POST.get('geometries')
+
+    if not geometries_str:
+        return redirect(reverse('core:map'))
+
+    data = json.loads(geometries_str)
+    geom_obj = extract_geojson(data)
+    if not geom_obj:
+        return redirect(reverse('core:map'))
+
+    coords = geom_obj['coordinates']
+
+    field_name = robot_manager.field.name
+    geo_file = GeoJson(os.path.join(paths.fields, field_name), "data")
+    field = FieldManager(field_name, geo_file.gdf)
 
     if shape == 'traject':
-        robot_manager.field.update_traject(geometries=geometries[0])
+        geoms = GeoJson.to_shapely(coords, type=GeomType.LINESTRING)
+        field.update_traject(geoms[0])
     elif shape == 'geofence':
-        robot_manager.field.update_geofence(geometries=geometries)
-    else:  # tasks
-        robot_manager.field.update_task(task_name=shape, geometries=geometries)
+        geoms = GeoJson.to_shapely(coords, type=GeomType.POLYGON)
+        field.update_geofence(geoms[0])
+    else:  # task
+        tm = field.get_task(shape)
+        if tm and tm.info.type.value in ['cardan', 'continuous', 'hitch']:
+            geom_type = GeomType.POLYGON
+        else:
+            geom_type = GeomType.MULTIPOINT
+        try:
+            geoms = GeoJson.to_shapely(coords, type=geom_type)
+        except Exception:
+            geoms = GeoJson.to_shapely(coords, type=GeomType.MULTIPOINT)
+        field.update_task(task_name=shape, geometry=geoms[0] if geoms else None)
 
+    geo_file.gdf = field.gdf
+    geo_file.save()
+    robot_manager.field = field
     robot_manager.update_field()
+
     return redirect(reverse('core:map'))
 
 
@@ -343,3 +426,20 @@ def map_edit_traject_rows(request):
         traject_rows_latlng.append(shp.transform_crs(utm_crs, wgs84_crs, traject_row))
 
     return JsonResponse({'latlng': traject_rows_latlng})
+
+
+def extract_geojson(data):
+    """Haalt de pure geometrie uit GeoJSON, of het nu een FeatureCollection, Feature of Geometry is."""
+    geojson = data.get('geojson')
+    if not geojson: return None
+    
+    if geojson.get('type') == 'FeatureCollection':
+        features = geojson.get('features', [])
+        if features and len(features) > 0:
+            return features[0].get('geometry')
+        return None
+        
+    if geojson.get('type') == 'Feature':
+        return geojson.get('geometry')
+    
+    return geojson

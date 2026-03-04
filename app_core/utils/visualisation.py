@@ -1,7 +1,6 @@
-from artof_utils.robot import robot_manager
-from artof_utils.redis_instance import redis_server
+from artof_utils.robot_manager import robot_manager
+from artof_utils.redis_manager import redis_manager
 from artof_utils.schemas.state import State
-from artof_utils.shapefile import transform_coordinates
 import numpy as np
 
 class Robot:
@@ -19,6 +18,6 @@ class Robot:
         points = transform * points
 
     def update(self):
-        state = redis_server.get_state("robot_center_state")
+        state: State = redis_manager.get_state("robot_center_state")
         
         return self.shape(state)
