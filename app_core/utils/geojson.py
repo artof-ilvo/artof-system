@@ -5,9 +5,11 @@ import geopandas as gpd
 import os
 import json
 from os import path, makedirs
+import rasterio
 from enum import Enum
 from shapely.geometry import shape, Point, Polygon, LineString, MultiPoint
 from shapely.ops import unary_union
+from PIL import Image
 from artof_utils.gis.utils import array
 from artof_utils.gis.raster import Raster as rstr
 
@@ -200,7 +202,7 @@ class GeoJson:
             return self.gdf.geometry.iloc[0] if len(self.gdf) == 1 else self.gdf.geometry.tolist()
         return None
     
-    def update_to_raster_ref(self, name: str, raster_path: str):
+    def update_to_raster_ref(self, name: str, raster_path: str, overlay_path: str = None, bounds: tuple = None):
         """
         Vervangt de vector-geometrie van een taak door een referentie naar een rasterbestand.
         De geometrie wordt 'None' omdat de GeoTIFF zelf zijn locatie bevat.
@@ -211,13 +213,20 @@ class GeoJson:
         if not self.gdf.empty and name in self.gdf['name'].values:
             idx = self.gdf.index[self.gdf['name'] == name].tolist()[0]
             self.gdf.at[idx, 'geometry'] = None
-            self.gdf.at[idx, 'type'] = 'raster'
             self.gdf.at[idx, 'raster_source'] = raster_path
+            self.gdf.at[idx, 'overlay_source'] = overlay_path
+            if bounds is not None:
+                self.gdf.at[idx, 'bounds'] = str(bounds)
+            else:
+                self.gdf.at[idx, 'bounds'] = None
+
         else:
             new_row = gpd.GeoDataFrame({
                 'name': [name],
-                'type': ['raster'],
+                'type': ['task'],
                 'raster_source': [raster_path],
+                'overlay_source': [overlay_path],
+                'bounds': [bounds],
                 'geometry': [None]
             }, crs="EPSG:4326")
             self.gdf = pd.concat([self.gdf, new_row], ignore_index=True)
@@ -249,15 +258,47 @@ class GeoJson:
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
         input_crs = f"EPSG:{epsg}" if epsg else "EPSG:4326"
 
-        rstr.create_geotiff(
+        print("Geom bounds:", shapely_geom.bounds)
+        print("Geom type:", shapely_geom.geom_type)
+        print("Field bounds:", field_bounds)
+        # use the Raster class to generate the raster array and transform
+        raster_array, transform, width, height = rstr.generate_array(
            geometry=shapely_geom,
            bounds=field_bounds, 
            resolution=resolution,
-           output_path=full_path,
-           crs=input_crs
         )
 
-        self.update_to_raster_ref(name, raster_rel_path)
+        png_rel_path = f"rasters/{name}.png"
+        png_full_path = os.path.join(self.folder_path, png_rel_path)
+
+        # force 2D array
+        raster_2d = raster_array.reshape(height, width)
+        rgba_array = np.zeros((height, width, 4), dtype=np.uint8)
+
+        active_pixels = raster_2d == 255
+
+        rgba_array[active_pixels, 2] = 255  
+        rgba_array[active_pixels, 3] = 200  
+        img = Image.fromarray(rgba_array, mode='RGBA')
+        img.save(png_full_path)
+
+        # save the raster using rasterio
+        with rasterio.open(
+            full_path,
+            'w',
+            driver='GTiff',
+            height=height,
+            width=width,
+            count=1,
+            dtype=raster_array.dtype,
+            crs=input_crs,
+            transform=transform,
+        ) as dst:
+            dst.write(raster_array, 1)
+
+        # update the GeoJSON to reference the new raster instead of vector geometry
+        self.update_to_raster_ref(name, raster_rel_path, png_rel_path, bounds=field_bounds)
+        
         if properties:
              idx = self.gdf.index[self.gdf['name'] == name].tolist()[0]
              for key, value in properties.items():

@@ -10,7 +10,7 @@
 </div>
 <div id="file-{{ base_id }}" style="display: none;">
     <label class="mb-1">Input the shape files (.geojson) and press check when ready.</label>
-    <input type="file" class="form-control" multiple="" min_num="1" max_num="1" accept=".geojson, .json" max_file_size="5242880" id="file-input-{{ base_id }}">
+    <input type="file" class="form-control" multiple="" min_num="1" max_num="1" accept=".geojson, .json, .tiff, .geotiff" max_file_size="5242880" id="file-input-{{ base_id }}">
 </div>
 <div id="draw-{{ base_id }}" style="display: none;">
     <label>Draw on the map and press check when ready.</label>
@@ -113,29 +113,35 @@ $('#file-input-{{ base_id }}').change(function() {
     })
     .then(response => response.json())
     .then(data => {
-        var tempLayer = L.geoJSON(data);
-        var layers = tempLayer.getLayers(); 
-
-        if (layers.length > 0) {
-            var geometry = layers[0];
-
-            var formattedData = {
-                empty: false,
-                geojson: geometry.toGeoJSON() 
-            };
-
-            try {
-                updateLayerGroup(formattedData, "{{ base_id }}");
-            } catch (err) {
-                console.error("Fout tijdens het updaten van de kaart: ", err);
-            }
+        if (data.type === 'raster') {
+            // RASTER AFHANDELING
+            console.log("Raster succesvol geüpload:", data.url);
+            // Hier zou je een L.imageOverlay of een raster plugin kunnen aanroepen
+            alert("Raster taak toegevoegd: " + data.name);
+            location.reload(); // Voor nu simpelste manier om de kaart te verversen
         } else {
-            console.warn("Geen geldige vormen gevonden in de upload.");
+            var tempLayer = L.geoJSON(data);
+            var layers = tempLayer.getLayers(); 
+
+            if (layers.length > 0) {
+                var geometry = layers[0];
+
+                var formattedData = {
+                    empty: false,
+                    geojson: geometry.toGeoJSON() 
+                };
+
+                try {
+                    updateLayerGroup(formattedData, "{{ base_id }}");
+                } catch (err) {
+                    console.error("Fout tijdens het updaten van de kaart: ", err);
+                }
+            } else {
+                console.warn("Geen geldige vormen gevonden in de upload.");
+            }
         }
     })
     .catch(error => console.error('Upload Error:', error));
 });
 });
-
-
 </script>

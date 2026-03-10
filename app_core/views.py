@@ -91,15 +91,28 @@ def field_duplicate(request):
 # Field Edit
 def field_edit_geojson(request):
     if request.method == 'POST':
+        uploaded_files = request.FILES.getlist('files')
+        
+        for uploaded_file in uploaded_files:
+            if uploaded_file.name.lower().endswith(('.tif', '.tiff')):
+                return JsonResponse({
+                    'type': 'raster',
+                    'name': uploaded_file.name,
+                    'message': 'Raster bestand herkend.'
+                })
+
         form = FileFieldForm(request.POST, request.FILES)
         if form.is_valid():
-            geo_file = form.load_geojson()
-            if geo_file and geo_file.context:
-                return JsonResponse(geo_file.context)
-            else:
-                return JsonResponse({'status': 'error', 'message': 'Invalid geojson file'}, status=404)
+            try:
+                geo_file = form.load_geojson()
+                if geo_file and geo_file.context:
+                    return JsonResponse(geo_file.context)
+                else:
+                    return JsonResponse({'status': 'error', 'message': 'Ongeldig of leeg geojson bestand'}, status=400)
+            except Exception as e:
+                return JsonResponse({'status': 'error', 'message': f'Fout bij inladen bestand: {str(e)}'}, status=400)
 
-    return JsonResponse({'status': 'error', 'message': 'No geojson file'}, status=404)
+    return JsonResponse({'status': 'error', 'message': 'Geen bestand ontvangen'}, status=400)
 
 def field_edit_context(field):
     field_context = field.context
@@ -131,6 +144,13 @@ def field_edit_task_remove(request):
     field_name = request.GET.get('field_name')
     geo_file = GeoJson(os.path.join(paths.fields, field_name), "data") 
     task_name = request.GET.get('task_name')
+    base_raster_folder = os.path.join(paths.fields, field_name, 'rasters')
+    tif_path = os.path.join(base_raster_folder, f"{task_name}.tif")
+    png_path = os.path.join(base_raster_folder, f"{task_name}.png")
+    if os.path.exists(tif_path):
+        os.remove(tif_path)
+    if os.path.exists(png_path):
+        os.remove(png_path)
     field = FieldManager(field_name, geo_file.gdf)
     field.remove_task(task_name)
     geo_file.gdf = field.gdf
@@ -147,8 +167,6 @@ def field_edit_name(request):
     field.rename(new_field_name)
     geo_file.gdf = field.gdf
     geo_file.save()
-    #return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
-    #return JsonResponse({'status': 'success'})
     return redirect(reverse('core:field_edit') + '?name=' + new_field_name)
 
 def field_edit_geofence(request):
@@ -202,7 +220,12 @@ def field_edit_task(request):
     task = json.loads(request.POST.get('data'))
     input_mode = request.POST.get('input_mode')
 
+    resolution = 0.000001
+
     geometries = None
+    coords = None
+    geom_type = None
+
     if input_mode != 'original':
         task_geom_data = task.get('geometry', {})
         
@@ -213,18 +236,41 @@ def field_edit_task(request):
             else:
                 coords = geojson['geometry']['coordinates']
 
-            if task['type'] in ['cardan', 'continuous', 'hitch']:
+            if task['hitch_type'] in ['cardan', 'continuous', 'hitch']:
+                print(task['hitch_type'], "krijgt POLYGON")
                 geom_type = GeomType.POLYGON
             else:
+                print(task['hitch_type'], "krijgt MULTIPOINT")
                 geom_type = GeomType.MULTIPOINT 
+            
             geometries = GeoJson.to_shapely(coords, type=geom_type)
 
-    task_info = Task(name=task['name'], type=task['type'], implement='' if not task['implement'] else task['implement'], hitch=task['hitch'])
-    
-    field.update_task(task['name'], geometries, task_info)
-    
-    geo_file.gdf = field.gdf
-    geo_file.save()
+    task_info = Task(name=task['name'], type=task['type'], hitch_type=task['hitch_type'], implement='' if not task['implement'] else task['implement'], hitch_name=task['hitch_name'])
+
+    if coords is not None:
+        geo_file.gdf = field.gdf
+        
+        properties = {
+            'type': task_info.type,
+            'implement': task_info.implement,
+            'hitch_type': task_info.hitch_type,
+            'hitch_name': task_info.hitch_name,
+        }
+
+        geo_file.save_as_raster(
+            name=task['name'],
+            data=coords,
+            resolution=resolution,
+            properties=properties,
+            epsg=4326, 
+            type=geom_type
+        )
+
+        field.gdf = geo_file.gdf
+    else:
+        field.update_task(task['name'], geometries, task_info)
+        geo_file.gdf = field.gdf
+        geo_file.save()
     
     return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
 

@@ -69,6 +69,15 @@ class Fields(BaseModel):
 
     def exists(self, field_name):
         return field_name in self.fields
+
+    def remove_raster_from_field(self, field_name, task_name):
+        assert field_name in self.fields, f"Field {field_name} does not exist."
+
+        field_path = path.join(paths.base, "field", field_name)
+        raster_path = path.join(field_path, "raster", f"{task_name}.tif")
+
+        if path.exists(raster_path):
+            os.remove(raster_path)
     
     @staticmethod
     def get_current_field_name() -> str:

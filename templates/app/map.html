@@ -188,19 +188,31 @@
     // Draw traject
     if (fieldData.traject && fieldData.traject.empty === false) {
         L.geoJSON(fieldData.traject.geojson, {
-            style: { color: 'blue', weight: 3 }
+            style: { color: 'red', weight: 3, fillOpacity: 0.7 }
         }).addTo(map);
     }
 
-    // Draw tasks
-    for (let taskName in fieldData.tasks) {
-        let task = fieldData.tasks[taskName];
-       if (task && task.geometry && task.geometry.empty === false) {
-            L.geoJSON(task.geometry.geojson, {
-               circle: { radius: 5, fillColor: 'green', fillOpacity: 0.8 } 
-           }).addTo(map);
-      }
+    var layerGroups = {
+        {% for task in task_geometries %}
+            '{{ task.name }}': L.layerGroup().addTo(map),
+        {% endfor %}
     }
+    // Draw tasks
+    const fieldMediaBaseUrl = "{{ MEDIA_URL }}field/" + fieldData.name + "/";
+    {% for task in task_geometries %}
+        var taskName = '{{ task.name }}';
+        var taskData = fieldData.tasks[taskName];
+
+        if (taskData && taskData.overlay_source && taskData.image_bounds) {
+            
+            var rasterOverlay = L.imageOverlay(fieldMediaBaseUrl + taskData.overlay_source, taskData.image_bounds, {
+                opacity: 0.5, 
+                interactive: false,
+                zIndex: 1
+            })
+            layerGroups[taskName].addLayer(rasterOverlay);
+        }
+    {% endfor %}
 
     // Draw robot
     var robotGroup = L.layerGroup().addTo(map);
@@ -230,7 +242,7 @@
         var targetCoordinate = L.latLng(latitude, longitude);
 
         return mapBounds.contains(targetCoordinate);
-    }
+    } 
 
     // Additional map features
     map.on('click', function(e) {

@@ -30,9 +30,9 @@
 
         <!-- Tasks -->
         <div id="tasks-container">
-        {% for task in task_geometries %}
-            {% include "components/container_task_edit.html" with task=task implement_choices=implement_choices type_choices=type_choices hitch_choices=hitch_choices %}
-        {% endfor %}
+            {% for task in task_geometries %}
+                {% include "components/container_task_edit.html" with task=task implement_choices=implement_choices type_choices=type_choices hitch_choices=hitch_choices %}
+            {% endfor %}
         </div>
 
         <div class="row mb-2">
@@ -194,7 +194,7 @@
                             symbol: L.Symbol.arrowHead({
                                 pixelSize: 5, 
                                 polygon: true, 
-                                pathOptions: {color: 'red', fillOpacity: 0, weight: 2}
+                                pathOptions: {color: 'red', fillOpacity: 0.2, weight: 2}
                             })
                         }]
                     }).addTo(layerGroups[name]);
@@ -269,13 +269,11 @@
     var overlayGroup = L.layerGroup().addTo(map);
 
     var fieldData = JSON.parse('{{ field_json | safe }}');
-    console.log(fieldData.traject);
-    console.log(fieldData);
     var layerGroups = {
         'traject': L.layerGroup().addTo(map),
         'geofence': L.layerGroup().addTo(map),
         {% for task in task_geometries %}
-            '{{ task.name }}': L.layerGroup().addTo(map),
+        '{{ task.name }}': L.layerGroup().addTo(map),
         {% endfor %}
     }
 
@@ -314,10 +312,22 @@
 
     // Initialize field on the map
     updateLayerGroup(fieldData.geofence, 'geofence');
-    {% for task in task_geometries %}
-    updateLayerGroup(fieldData.tasks['{{ task.name }}'].geometry, '{{ task.name }}');
-    {% endfor %}
     updateLayerGroup(fieldData.traject, 'traject');
+    const fieldMediaBaseUrl = "{{ MEDIA_URL }}field/{{ field_name }}/";
+    {% for task in task_geometries %}
+        var taskName = '{{ task.name }}';
+        var taskData = fieldData.tasks[taskName];
+
+        if (taskData && taskData.overlay_source && taskData.image_bounds) {
+            console.log("Overlay source: " + taskData.overlay_source);
+            var rasterOverlay = L.imageOverlay(fieldMediaBaseUrl + taskData.overlay_source, taskData.image_bounds, {
+                opacity: 0.8, 
+                interactive: false,
+                zIndex: 450
+            })
+            layerGroups[taskName].addLayer(rasterOverlay);
+        }
+    {% endfor %}
 
     // Document ready
     $(document).ready(function() {
@@ -337,6 +347,7 @@
             }).then(response => {
                 if (response.ok) {
                     fieldData.name = newName;
+                    window.location.href = response.url;
                     $('#button-field-name').removeClass('btn-outline-secondary').addClass('btn-outline-success');
                     $('#collapse-field-name').collapse('hide');
                 } else {

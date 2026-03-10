@@ -13,13 +13,13 @@
         <label for="hitch-{{ task.name }}" class="col-form-label me-2">Hitch:</label>
         <select id="hitch-{{ task.name }}" name="{{ task.name }}" class="form-select">
             {% for key, value in hitch_choices %}
-                <option value="{{ value }}" {% if value == task.hitch %}selected{% endif %}>{{ value }}</option>
+                <option value="{{ value }}" {% if value == task.hitch_name %}selected{% endif %}>{{ value }}</option>
             {% endfor %}
         </select>
         <label for="type-{{ task.name }}" class="col-form-label me-2 ms-4">Type:</label>
         <select id="type-{{ task.name }}" name="{{ task.name }}" class="form-select">
             {% for key, value in type_choices %}
-                <option value="{{ value }}" {% if key == task.type %}selected{% endif %}>{{ value }}</option>
+                <option value="{{ value }}" {% if key == task.hitch_type %}selected{% endif %}>{{ value }}</option>
             {% endfor %}
         </select>
         <label for="implement-{{ task.name }}" class="col-form-label me-2 ms-4">Implement:</label>
@@ -40,7 +40,7 @@
         });
 
         $('#type-{{ task.name }}').change(function() {
-            fieldData.tasks.{{ task.name }}.type = this.value;
+            fieldData.tasks.{{ task.name }}.hitch_type = this.value;
         });
 
         $('#hitch-{{ task.name }}').change(function() {

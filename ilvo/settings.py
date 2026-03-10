@@ -66,6 +66,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.media',
             ],
             'libraries': {
                 'filters': 'ilvo.filters',
@@ -139,3 +140,7 @@ ASGI_APPLICATION = "ilvo.asgi.application"
 
 # Fixes the issue of CPU overloading with Daphne
 CHANNEL_LAYERS = {}  # or not
+
+# media settings
+MEDIA_URL = os.environ.get('MEDIA_URL', '/media/')
+MEDIA_ROOT = os.path.join(BASE_DIR.parent, 'ilvo', 'data')
