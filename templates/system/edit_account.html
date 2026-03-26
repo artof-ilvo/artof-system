@@ -1,0 +1,58 @@
+{% extends "system/base.html" %} 
+{% block title %} Edit Account {% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-md-6 offset-md-3">
+        
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2>Account Settings</h2>
+            <a href="{% url 'system:settings' %}" class="btn btn-outline-secondary btn-sm">Back</a>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                {% if error %}
+                    <div class="alert alert-danger">{{ error }}</div>
+                {% endif %}
+                {% if success %}
+                    <div class="alert alert-success">{{ success }}</div>
+                {% endif %}
+
+                <form method="POST" action="{% url 'system:edit_account' %}">
+                    {% csrf_token %}
+                    
+                    <h5 class="mb-3 border-bottom pb-2">Change username</h5>
+                    <div class="mb-4">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-control" name="username" value="{{ request.user.username }}" required>
+                    </div>
+
+                    <h5 class="mb-3 border-bottom pb-2">Change password <small class="text-muted fs-6 fw-normal">(Optional)</small></h5>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Current password</label>
+                        <input type="password" class="form-control" name="old_password" placeholder="Only if you want to change your password">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">New password</label>
+                        <input type="password" class="form-control" name="new_password">
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">Verify new password</label>
+                        <input type="password" class="form-control" name="confirm_password">
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Save</button>
+                    </div>
+                </form>
+
+            </div>
+        </div>
+        
+    </div>
+</div>
+{% endblock %}

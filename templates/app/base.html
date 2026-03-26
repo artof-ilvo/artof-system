@@ -66,7 +66,7 @@
           <div id="error-bar-positive" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuemin="0" aria-valuemax="100"></div>
         </div>
       </div>
-
+      
       <!-- Navigation selection -->
       <form class="form-inline flex-grow-1 mt-2 sm-0" id="navigation-state-form">
         {% csrf_token %}
@@ -167,17 +167,12 @@
           // update state
           let now = Date.now();
           if (now - stateUpdateTime > 500) {
-            if (currentState !== data.current_state) {
-              const targetId = `radio-state-${data.current_state}`;
-              $('input[name="state"]').each(function() {
-                if (this.id !== targetId) {
-                  $(this).prop('checked', false);
-                  $(`label[for="${this.id}"]`).removeClass('active');
-                }
-              });
-              currentState = data.current_state;
-            }
-            stateUpdateTime = now;
+              if (currentState !== data.current_state) {
+                  const targetId = `#radio-state-${data.current_state}`;
+                  $(targetId).prop('checked', true);
+                  currentState = data.current_state;
+              }
+              stateUpdateTime = now;
           }
 
           if (data.notification !== "-") {

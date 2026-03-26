@@ -202,38 +202,33 @@ class GeoJson:
             return self.gdf.geometry.iloc[0] if len(self.gdf) == 1 else self.gdf.geometry.tolist()
         return None
     
-    def update_to_raster_ref(self, name: str, raster_path: str, overlay_path: str = None, bounds: tuple = None):
+    def update_to_raster_ref(self, name: str, raster_path: str, bounds: tuple = None):
         """
-        Vervangt de vector-geometrie van een taak door een referentie naar een rasterbestand.
-        De geometrie wordt 'None' omdat de GeoTIFF zelf zijn locatie bevat.
+        Voegt de referentie naar de GeoTIFF toe aan de bestaande rij in de GeoDataFrame.
+        Let op: We laten 'geometry' intact zodat je deze in de UI nog kunt bewerken!
         """
         if self.gdf is None or 'name' not in self.gdf.columns:
              self.load()
 
         if not self.gdf.empty and name in self.gdf['name'].values:
             idx = self.gdf.index[self.gdf['name'] == name].tolist()[0]
-            self.gdf.at[idx, 'geometry'] = None
+            # We zetten geometry NIET meer op None, we behouden de vectoren!
             self.gdf.at[idx, 'raster_source'] = raster_path
-            self.gdf.at[idx, 'overlay_source'] = overlay_path
+            
             if bounds is not None:
                 self.gdf.at[idx, 'bounds'] = str(bounds)
             else:
                 self.gdf.at[idx, 'bounds'] = None
-
         else:
-            new_row = gpd.GeoDataFrame({
-                'name': [name],
-                'type': ['task'],
-                'raster_source': [raster_path],
-                'overlay_source': [overlay_path],
-                'bounds': [bounds],
-                'geometry': [None]
-            }, crs="EPSG:4326")
-            self.gdf = pd.concat([self.gdf, new_row], ignore_index=True)
+            print(f"[GeoJson] Waarschuwing: {name} niet gevonden in de data. Voeg deze eerst toe via de FieldManager.")
             
         self.save()
 
-    def save_as_raster(self, name: str, data: Any, resolution: float, properties: dict = None, epsg: int = 0, type: GeomType = None):
+
+    def save_as_raster(self, name: str, data: Any, resolution: float, properties: dict = None, epsg: int = 0, type: Any = None):
+        """
+        Converteert een vorm (Geofence, Traject of Task) naar een GeoTIFF raster en slaat de link op.
+        """
         geom_list = self.to_shapely(data, type)
         clean_geoms = [g for g in geom_list if g is not None]
         
@@ -244,13 +239,13 @@ class GeoJson:
         shapely_geom = unary_union(clean_geoms)
 
         field_bounds = None
-        if self.gdf is not None and not self.gdf.empty:
+        if self.gdf is not None and not self.gdf.empty and 'name' in self.gdf.columns:
             geofence_row = self.gdf[self.gdf['name'] == 'geofence']
             if not geofence_row.empty:
                 field_bounds = geofence_row.geometry.iloc[0].bounds
         
         if field_bounds is None:
-            print(f"[GeoJson] Geen geofence gevonden, we gebruiken de bounds van de taak zelf.")
+            print(f"[GeoJson] Geen geofence gevonden, we gebruiken de bounds van de vorm zelf.")
             field_bounds = shapely_geom.bounds
 
         raster_rel_path = f"rasters/{name}.tif"
@@ -258,31 +253,14 @@ class GeoJson:
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
         input_crs = f"EPSG:{epsg}" if epsg else "EPSG:4326"
 
-        print("Geom bounds:", shapely_geom.bounds)
-        print("Geom type:", shapely_geom.geom_type)
-        print("Field bounds:", field_bounds)
-        # use the Raster class to generate the raster array and transform
+        print(f"Genereren raster voor {name}... Field bounds: {field_bounds}")
+
         raster_array, transform, width, height = rstr.generate_array(
            geometry=shapely_geom,
            bounds=field_bounds, 
            resolution=resolution,
         )
 
-        png_rel_path = f"rasters/{name}.png"
-        png_full_path = os.path.join(self.folder_path, png_rel_path)
-
-        # force 2D array
-        raster_2d = raster_array.reshape(height, width)
-        rgba_array = np.zeros((height, width, 4), dtype=np.uint8)
-
-        active_pixels = raster_2d == 255
-
-        rgba_array[active_pixels, 2] = 255  
-        rgba_array[active_pixels, 3] = 200  
-        img = Image.fromarray(rgba_array, mode='RGBA')
-        img.save(png_full_path)
-
-        # save the raster using rasterio
         with rasterio.open(
             full_path,
             'w',
@@ -296,8 +274,7 @@ class GeoJson:
         ) as dst:
             dst.write(raster_array, 1)
 
-        # update the GeoJSON to reference the new raster instead of vector geometry
-        self.update_to_raster_ref(name, raster_rel_path, png_rel_path, bounds=field_bounds)
+        self.update_to_raster_ref(name, raster_rel_path, bounds=field_bounds)
         
         if properties:
              idx = self.gdf.index[self.gdf['name'] == name].tolist()[0]

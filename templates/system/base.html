@@ -44,8 +44,17 @@
             <a class="nav-link" href="{% url 'system:monitor' %}">Monitor</a>
           </li>
         </ul>
-        <div class="my-2 my-lg-0" style="margin-left: auto">
+        <div class="d-flex align-items-center my-2 my-lg-0" style="margin-left: auto">
+          
+          <form method="post" action="{% url 'system:logout' %}" class="m-0 me-3">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-outline-secondary">
+              Logout
+            </button>
+          </form>
+
           <a class="nav-link" href="{% url 'core:field' %}">App</a>
+          
         </div>
       </div>
     </nav>

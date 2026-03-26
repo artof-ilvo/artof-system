@@ -51,6 +51,32 @@
         </div>
       </td>
     </tr>
+    <tr>
+      <th scope="row">3</th>
+      <td>Types</td>
+      <td class="text-right">
+        <div class="btn-group button-group">
+          <form method="GET" action="{% url 'system:edit_settings' %}">
+            <button type="submit" class="btn btn-outline-primary" name="filename" value="types.json">
+              {% include "icons/pen.html" %}
+            </button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <th scope="row">4</th>
+      <td>Account (Username & Password)</td>
+      <td class="text-right">
+        <div class="btn-group button-group">
+          <form method="GET" action="{% url 'system:edit_account' %}">
+            <button type="submit" class="btn btn-outline-primary">
+              {% include "icons/pen.html" %}
+            </button>
+          </form>
+        </div>
+      </td>
+    </tr>
   </tbody>
 </table>
 </div>

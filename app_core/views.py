@@ -4,6 +4,7 @@ from django.urls import reverse
 from django.http import HttpResponse, JsonResponse
 from artof_utils.robot_manager import robot_manager
 from artof_utils.field_manager import FieldManager
+from artof_utils.visualisation_manager import visualisation_manager
 from app_core.utils.fields import Fields
 from artof_utils.schemas.task import Task
 from artof_utils.gis import traject
@@ -22,6 +23,7 @@ import io
 import zipfile
 from django.http import HttpResponse
 from django.shortcuts import render
+
 
 # Create your views here.
 def create_context(data=dict()):
@@ -175,9 +177,12 @@ def field_edit_geofence(request):
     field = FieldManager(field_name, geo_file.gdf)
 
     data = json.loads(request.POST.get('data'))
+    resolution = 0.000001
     
+    # 1. Bepaal de geometrie en coördinaten
     if data['empty'] or request.POST.get('input_mode') == 'drive':
         geom = GeomType.Polygon([(0, 0), (0, 10), (10, 10), (10, 0), (0, 0)])
+        coords = [[(0, 0), (0, 10), (10, 10), (10, 0), (0, 0)]]
         field.update_geofence(geom)
     else:
         geom_obj = extract_geojson(data)
@@ -185,10 +190,24 @@ def field_edit_geofence(request):
         geoms = GeoJson.to_shapely(coords, type=GeomType.POLYGON)
         field.update_geofence(geoms[0])
 
+    # 2. Synchroniseer en bewaar de vectoren in de GeoJSON
     geo_file.gdf = field.gdf
     geo_file.save()
 
+    # 3. Genereer en bewaar het raster (geofence)
+    geo_file.save_as_raster(
+        name='geofence',
+        data=coords,
+        resolution=resolution,
+        epsg=4326,
+        type=GeomType.POLYGON
+    )
+
+    # 4. Sync terug naar de field manager voor de frontend rendering
+    field.gdf = geo_file.gdf
+
     return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
+
 
 def field_edit_traject(request):
     field_name = request.POST.get('name')
@@ -196,9 +215,12 @@ def field_edit_traject(request):
     field = FieldManager(field_name, geo_file.gdf)
 
     data = json.loads(request.POST.get('data'))
+    resolution = 0.000001
     
+    # 1. Bepaal de geometrie en coördinaten
     if data['empty'] or request.POST.get('input_mode') == 'drive':
         geom = GeomType.LineString([(0, 0), (10, 10)])
+        coords = [[(0, 0), (10, 10)]]
         field.update_traject(geom)
     else:
         geom_obj = extract_geojson(data)
@@ -206,8 +228,22 @@ def field_edit_traject(request):
         geoms = GeoJson.to_shapely(coords, type=GeomType.LINESTRING)
         field.update_traject(geoms[0])
 
+    # 2. Synchroniseer en bewaar de vectoren in de GeoJSON
     geo_file.gdf = field.gdf
     geo_file.save()
+
+    # 3. Genereer en bewaar het raster (traject)
+    # Let op: we gebruiken geo_file.save_as_raster en NIET GeoJson.save_as_raster
+    geo_file.save_as_raster(
+        name='traject',
+        data=coords,
+        resolution=resolution,
+        epsg=4326,
+        type=GeomType.LINESTRING
+    )
+
+    # 4. Sync terug naar de field manager voor de frontend rendering
+    field.gdf = geo_file.gdf
 
     return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
 
@@ -219,13 +255,13 @@ def field_edit_task(request):
 
     task = json.loads(request.POST.get('data'))
     input_mode = request.POST.get('input_mode')
-
     resolution = 0.000001
 
     geometries = None
     coords = None
     geom_type = None
 
+    # 1. Bepaal de geometrie en coördinaten
     if input_mode != 'original':
         task_geom_data = task.get('geometry', {})
         
@@ -247,9 +283,15 @@ def field_edit_task(request):
 
     task_info = Task(name=task['name'], type=task['type'], hitch_type=task['hitch_type'], implement='' if not task['implement'] else task['implement'], hitch_name=task['hitch_name'])
 
+    # 2. Update EERST de vectoren via de FieldManager, zodat save_as_raster straks de rij kan vinden!
+    field.update_task(task['name'], geometries, task_info)
+    
+    # 3. Synchroniseer en bewaar de vectoren in de GeoJSON
+    geo_file.gdf = field.gdf
+    geo_file.save()
+
+    # 4. Als er coördinaten zijn, genereer dan het raster en de properties
     if coords is not None:
-        geo_file.gdf = field.gdf
-        
         properties = {
             'type': task_info.type,
             'implement': task_info.implement,
@@ -265,15 +307,11 @@ def field_edit_task(request):
             epsg=4326, 
             type=geom_type
         )
-
+        
+        # 5. Sync terug naar de field manager voor de frontend rendering
         field.gdf = geo_file.gdf
-    else:
-        field.update_task(task['name'], geometries, task_info)
-        geo_file.gdf = field.gdf
-        geo_file.save()
     
     return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
-
 
 def field_edit(request):
     field_name = request.GET.get('name')
@@ -356,14 +394,16 @@ def map_context():
     field_name = Fields.get_current_field_name()  
     geo_file = GeoJson(os.path.join(paths.fields, field_name), "data")
     robot_manager.load_field(geo_file.gdf)
-    ctx = robot_manager.field.context  
-    ctx['field_json'] = robot_manager.field.json
-    ctx['simulation'] = {
+    map_context = robot_manager.field.context  
+    map_context['field_name'] = field_name
+    map_context['field_json'] = robot_manager.field.json
+    map_context['simulation'] = {
+
         'active': robot_manager.get_simulation_mode(),
         'speed_factor': int(robot_manager.get_simulation_speed_factor())
     }
-    ctx['task_geometries'] = list(ctx.get('tasks', {}).values())
-    return ctx
+    map_context['task_geometries'] = list(map_context.get('tasks', {}).values())
+    return map_context
 
 
 def map(request):
