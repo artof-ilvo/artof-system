@@ -31,5 +31,6 @@ urlpatterns = [
     path('field/delete/new', views.delete_new_field, name='delete_new_field'),
     path('settings/', views.settings, name='settings'),
     path('settings/update/hitch', views.update_hitch_settings, name='update_hitch_settings'),
-    path('settings/update/navigation', views.update_navigation_settings, name='update_navigation_settings')
+    path('settings/update/navigation', views.update_navigation_settings, name='update_navigation_settings'),
+    path('reset-task/', views.reset_task, name='reset_task'),
 ]

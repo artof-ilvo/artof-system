@@ -45,6 +45,14 @@ def navigation_state(request):
         robot_manager.set_navigation_state(new_state)
     return HttpResponse()
 
+def reset_task(request):
+    if request.method == 'POST':
+        # Stuur het signaal naar je achtergrondproces
+        visualisation_manager.reset_task()
+        return JsonResponse({'status': 'success', 'message': 'Taak gereset en gearchiveerd.'})
+    
+    return JsonResponse({'status': 'error', 'message': 'Invalid request'}, status=400)
+
 # Field
 def field(request):
     fields = Fields()

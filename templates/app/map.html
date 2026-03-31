@@ -9,9 +9,12 @@
             <button id='folow-robot-button' type="button" class="btn mb-2 btn-outline-secondary side-widget">{% include "icons/crosshair.html" %}</button>
             <button id='direct-robot-button' type="button" class="btn mb-2 btn-outline-secondary side-widget">{% include "icons/cursor.html" %}</button>
             <button id='edit-field-button' type="button" class="btn btn-outline-secondary mb-2 side-widget">{% include "icons/pen.html" %}</button>
-            <button id='start-task-button' type="button" title="Start Task" class="btn btn-outline-success mb-2 side-widget">
-                {% include "icons/play.html" %}
-            </button>
+            <form id="reset-task-form" class="m-0 p-0">
+                {% csrf_token %}
+                <button id='reset-task-button' type="button" title="Reset Task" class="btn btn-outline-primary mb-2 side-widget">
+                    {% include "icons/arrow-repeat.html" %} 
+                </button>
+            </form>
             <form id="simulation-form">
                 {% csrf_token %}
                 <input type="checkbox" class="btn-check" id="simulation-check" name="simulation" value="on" autocomplete="off" {% if simulation.active %}checked{% endif %}>
@@ -400,6 +403,17 @@
         $('#edit-field-button').click(function () {
             window.location.href = "{% url 'core:field_edit' %}?name={{ field_name }}";
         });
+
+        // * Reset task
+        $('#reset-task-button').click(function () {
+            if (confirm('Are you sure you want to reset the task?')) {
+                fetch("{% url 'core:reset_task' %}", {
+                    method: 'POST',
+                    body: new FormData($('#reset-task-form')[0])
+                });
+            }
+        });
+
 
         // * Simulation
         $('#simulation-form').on('change', function(e) {

@@ -15,12 +15,6 @@
             </div>
         </form> 
 
-        <!-- Traject -->
-        {% include "components/button_collapse.html" with title="Traject" base_id="traject" %}
-        <form class="collapse form-inline mt-2" id="collapse-traject" method="POST" action="{% url 'core:field_edit_traject' %}">
-            {% csrf_token %}
-            {% include "components/container_field_edit.html" with base_id="traject" %}
-        </form> 
         <!-- Geofence -->
         {% include "components/button_collapse.html" with title="Geofence" base_id="geofence" %}
         <form class="collapse form-inline mt-2" id="collapse-geofence" method="POST" action="{% url 'core:field_edit_geofence' %}">
@@ -28,6 +22,13 @@
             {% include "components/container_field_edit.html" with base_id="geofence" %}
         </form> 
 
+        <!-- Traject -->
+        {% include "components/button_collapse.html" with title="Traject" base_id="traject" %}
+        <form class="collapse form-inline mt-2" id="collapse-traject" method="POST" action="{% url 'core:field_edit_traject' %}">
+            {% csrf_token %}
+            {% include "components/container_field_edit.html" with base_id="traject" %}
+        </form> 
+        
         <!-- Tasks -->
         <div id="tasks-container">
             {% for task in task_geometries %}
