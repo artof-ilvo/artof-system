@@ -24,12 +24,13 @@ urlpatterns = [
     path('field/edit/task', views.field_edit_task, name='field_edit_task'),
     path('field/edit/task/add', views.field_edit_task_add, name='field_edit_task_add'),
     path('field/edit/task/remove', views.field_edit_task_remove, name='field_edit_task_remove'),
-    path('field/edit/shapefile', views.field_edit_shapefile, name='field_edit_shapefile'),
+    path('field/edit/geojson', views.field_edit_geojson, name='field_edit_geojson'),
     path('field/select', views.field_select, name='field_select'),
     path('field/duplicate', views.field_duplicate, name='field_duplicate'),
     path('field/delete', views.field_delete, name='field_delete'),
     path('field/delete/new', views.delete_new_field, name='delete_new_field'),
     path('settings/', views.settings, name='settings'),
     path('settings/update/hitch', views.update_hitch_settings, name='update_hitch_settings'),
-    path('settings/update/navigation', views.update_navigation_settings, name='update_navigation_settings')
+    path('settings/update/navigation', views.update_navigation_settings, name='update_navigation_settings'),
+    path('reset-task/', views.reset_task, name='reset_task'),
 ]

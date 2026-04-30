@@ -4,45 +4,17 @@
 <div class="d-flex" id="overall-container">
     <div id="map-container" style="width: 100%; height: calc(100vh - 5em);"></div>
     
-    <div id="edit-field-container" class="mt-2 overflow-auto" style="width: 30em; display: none">
-            <div class="mt-1 d-flex">
-                <select class="form-select" id="edit-field-select">
-                    <option value="" selected>Select to edit</option>
-                    <option value="traject">Traject</option>
-                    <option value="geofence">Geofence</option>
-                    {% for task in task_geometries %}
-                        <option value="{{ task.name }}">{{ task.name }}: {{ task.type }}, {{ task.hitch }}</option> 
-                    {% endfor %}
-                </select>
-                <form method="POST" action="{% url 'core:map_edit_shape' %}" id="map-edit-upload-form">
-                    {% csrf_token %}
-                    <input name="shape" id="map-edit-shape-attr" type="hidden">
-                    <input name="geometries" id="map-edit-geometries-attr" type="hidden">
-                    <button class="btn btn-primary ms-2" id="button-upload" disabled>
-                        {% include "icons/upload.html" %}
-                    </button>
-                </form>
-            </div>
-
-            <!-- Page controls -->
-            <div class="mt-3" id="edit-traject-shape-panel" style="display: none">
-                {% include "components/container_traject_edit.html" %}
-            </div>
-
-            <div class="mt-3" id="edit-polygon-shape-panel" style="display: none">
-                {% include "components/container_polygon_edit.html" %}
-            </div>
-    </div>
-    
     <div class="mt-2" style="" id="side-widget-container">
         <div class="d-flex flex-column" id="sub-side-widget-container">
-            <!-- track robot -->
             <button id='folow-robot-button' type="button" class="btn mb-2 btn-outline-secondary side-widget">{% include "icons/crosshair.html" %}</button>
-            <!-- track robot -->
             <button id='direct-robot-button' type="button" class="btn mb-2 btn-outline-secondary side-widget">{% include "icons/cursor.html" %}</button>
-            <!-- Edit field -->
             <button id='edit-field-button' type="button" class="btn btn-outline-secondary mb-2 side-widget">{% include "icons/pen.html" %}</button>
-            <!-- Simulation -->
+            <form id="reset-task-form" class="m-0 p-0">
+                {% csrf_token %}
+                <button id='reset-task-button' type="button" title="Reset Task" class="btn btn-outline-primary mb-2 side-widget">
+                    {% include "icons/arrow-repeat.html" %} 
+                </button>
+            </form>
             <form id="simulation-form">
                 {% csrf_token %}
                 <input type="checkbox" class="btn-check" id="simulation-check" name="simulation" value="on" autocomplete="off" {% if simulation.active %}checked{% endif %}>
@@ -174,60 +146,9 @@
     // Adding layer to the map
     map.addLayer(layer);
 
-    // Draw field
-    // Draw geofence
-    var geofenceGroup = L.layerGroup();
-    var geofenceCoordinates = {{ geofence_geometry.latlng }};
-    var geofence = L.polygon(geofenceCoordinates, {
-        color: 'red',
-        fill: false,
-    }).addTo(geofenceGroup);
-    geofenceGroup.addTo(map);
-
-    // Draw tasks
-    var taskGroup = L.layerGroup();
-    {% for task in task_geometries %}
-        var taskCoordinates = {{ task.geometry.latlng }};
-        {% if task.type == 'continuous' %}
-            var task{{ task.name}} = L.polygon(taskCoordinates, {color: 'blue', weight: 2, fillOpacity: 0.2}).addTo(taskGroup);
-        {% elif task.type == 'cardan' %}
-            var task{{ task.name}} = L.polygon(taskCoordinates, {color: 'yellow', weight: 2, fillOpacity: 0.2}).addTo(taskGroup);
-        {% elif task.type == 'hitch' %}
-            var task{{ task.name}} = L.polygon(taskCoordinates, {color: 'green', weight: 2, fillOpacity: 0.2}).addTo(taskGroup);
-        {% elif task.type == 'discrete' %}
-            for (let i = 0; i < taskCoordinates.length; i++) {
-                var task{{ task.name}} = L.circleMarker(taskCoordinates[i], {color: 'blue', weight: 2, fillOpacity: 0.2, radius: 3}).addTo(taskGroup);
-            }
-        {% elif task.type == 'intermittent' %}
-            for (let i = 0; i < taskCoordinates.length; i++) {
-                var task{{ task.name}} = L.circleMarker(taskCoordinates[i], {color: 'blue', weight: 2, fillOpacity: 0.2, radius: 3}).addTo(taskGroup);
-            }
-        {% endif %}
-    {% endfor %}
-
-    taskGroup.addTo(map);
-
-    // Draw traject
-    var trajectGroup = L.layerGroup();
-    var trajectCornerCoordinates = {{ traject_geometry.latlng.0 }};
-    var traject = L.polyline(trajectCornerCoordinates, {
-        color: 'red',
-        weight: 2,
-        fillOpacity: 0.5,
-        dashArray: '5, 10' 
-    }).addTo(trajectGroup);
-    var decorator = L.polylineDecorator(traject, {
-        patterns: [
-            {offset: 25, repeat: 50, symbol: L.Symbol.arrowHead({pixelSize: 10, polygon: true, pathOptions: {color: 'red', fillOpacity: 0, weight: 2}})}
-        ]
-    }).addTo(trajectGroup);
-    trajectGroup.addTo(map);
-
-    // Draw robot
-    var robotGroup = L.layerGroup().addTo(map);
-    var driveInGroup = L.layerGroup().addTo(map);
-    var overlayGroup = L.layerGroup().addTo(map);
-    var highlightGroup = L.layerGroup().addTo(map);   
+    var fieldData = {{ field_json | safe }};
+    var originalFieldData = {{ field_json | safe }};
+    var backupFieldData = {{ field_json | safe }};
 
     // Aditional variables
     var followRobot = sessionStorage.getItem('follow-robot') === 'true';
@@ -237,9 +158,11 @@
     var editShape = '';
 
     var additionalPixelOffset = 30;
-    var fieldData = JSON.parse('{{ field_json | safe }}');
-    var originalFieldData = JSON.parse('{{ field_json | safe }}');
-    var backupFieldData = JSON.parse('{{ field_json | safe }}');
+
+    var robotGroup = L.layerGroup().addTo(map);
+    var driveInGroup = L.layerGroup().addTo(map);
+    var overlayGroup = L.layerGroup().addTo(map);
+    var highlightGroup = L.layerGroup().addTo(map);  
 
     // Function to check if a coordinate is still visible on the map
     function isCoordinateVisible(latitude, longitude) {
@@ -254,7 +177,7 @@
         var targetCoordinate = L.latLng(latitude, longitude);
 
         return mapBounds.contains(targetCoordinate);
-    }
+    } 
 
     // Additional map features
     map.on('click', function(e) {
@@ -279,8 +202,6 @@
     })
 
     // Check upload status to enable or disable the upload button
-
-    // Recursive comparison (example)
     function arraysEqual(arr1, arr2) {
         if (arr1 === arr2) return true; // Only works for primitive values
         if (arr1.length !== arr2.length) return false;
@@ -310,85 +231,109 @@
         if (commandRobot) {
             $('#command-robot-button').removeClass('btn-outline-secondary').addClass('btn-secondary');
         }
+
         // Get the host and port dynamically
         var host = window.location.hostname;
         var port = window.location.port;
-        var url = "/ws/robot/";
-
-        // Choose the appropriate protocol based on whether it's secure (https) or not
         var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         
-        // WebSocket URL
+        // 1. Haal de bounds op
+        let liveOverlay = null;
+        if (fieldData.bounds) {
+            let boundsArray = typeof fieldData.bounds === 'string' 
+                ? fieldData.bounds.replace(/[()]/g, '').split(',').map(Number) 
+                : fieldData.bounds;
+            
+            const leafletBounds = [
+                [boundsArray[1], boundsArray[0]], // Zuid-West hoek [Lat, Lon]
+                [boundsArray[3], boundsArray[2]]  // Noord-Oost hoek [Lat, Lon]
+            ];
+            
+            // WEBSOCKET CONNECTIE VOOR VISUALISATIE
+            var wsUrlVis = protocol + '//' + host + (port ? ':' + port : '') + "/ws/visualisation/";
+            const ws_vis = new ReconnectingWebSocket(wsUrlVis);
+
+            ws_vis.binaryType = 'blob'; 
+
+            ws_vis.onopen = function() {
+                console.log("Visualisation WebSocket verbonden (Binair)!");
+            };
+
+            ws_vis.onmessage = function(e) {
+                if (e.data instanceof Blob) {
+                    const imageUrl = URL.createObjectURL(e.data);
+                    
+                    if (!liveOverlay) {
+                        liveOverlay = L.imageOverlay(imageUrl, leafletBounds, {
+                            opacity: 1.0, 
+                            interactive: false,
+                            zIndex: 100
+                        }).addTo(map);
+                    } else {
+                        const oldUrl = liveOverlay._url; 
+                        
+                        liveOverlay.setUrl(imageUrl);
+
+                        if (oldUrl && oldUrl.startsWith('blob:')) {
+                            URL.revokeObjectURL(oldUrl);
+                        }
+                    }
+                } else {
+                    try {
+                        const data = JSON.parse(e.data);
+                        console.warn("Tekst ontvangen op binaire socket:", data);
+                    } catch(err) { }
+                }
+            };
+            
+            ws_vis.onclose = function(e) {
+                console.error('Visualisation socket gesloten');
+            };
+        }
+
+        var url = "/ws/robot/";
         var wsUrlRobot = protocol + '//' + host + (port ? ':' + port : '') + url;
 
-
-        // Use the value in JavaScript
         console.log('Robot webSocket url:', wsUrlRobot);
 
         const ws_robot = new ReconnectingWebSocket(wsUrlRobot);
     
         ws_robot.onmessage = (event) => {
-            // Clear all data first
             robotGroup.clearLayers();
 
             // Parse data
             let data = JSON.parse(event.data);
 
-            // add layers
-            // Robot
-            robotLocation = data.robot.center;
-            robotHeading = data.robot.orientation;
-            L.polygon(data.robot.contours.latlng, {color: 'transparant', fillColor: 'blue', fillOpacity: 0.5}).addTo(robotGroup);
-            // Hitch layers
-            for (let hitchName in data.hitches) {
-                let hitch = data.hitches[hitchName];
-                L.circleMarker(hitch.state.ball.point.latlng, {color: 'transparant', fillColor: 'white', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
-                if (hitch.activate) {
-                    L.circleMarker(hitch.state.ref.point.latlng, {color: 'transparant', fillColor: 'red', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
-                } else {
-                    L.circleMarker(hitch.state.ref.point.latlng, {color: 'transparant', fillColor: 'white', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
-                }
-            }
-            // Add controller info
-            let currentPoint = data.controller_info.current.latlng;
-            let carrotPoint = data.controller_info.carrot.latlng;
-            let closestPoint = data.controller_info.closest.latlng;
-            L.circleMarker(currentPoint, {color: 'transparant', fillColor: 'green', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
-            L.circleMarker(carrotPoint, {color: 'transparant', fillColor: 'green', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
-            L.circleMarker(closestPoint, {color: 'transparant', fillColor: 'green', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
+            if (data.robot && data.robot.center) {
+                robotLocation = data.robot.center;
+                robotHeading = data.robot.orientation;
 
-            let headCurrentPoint = data.controller_info.headCurrent.latlng;
-            let headClosestPoint = data.controller_info.headClosest.latlng;
-            L.circleMarker(headCurrentPoint, {color: 'transparant', fillColor: 'green', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
-            L.circleMarker(headClosestPoint, {color: 'transparant', fillColor: 'green', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup); 
-
-            // sections
-            for (let implementName in data.implements) {
-                let implement = data.implements[implementName];
-                for (let i=0; i < implement.sections.length; i++) {
-                    let section = implement.sections[i];
-                    if (section.active) {
-                        L.polygon(section.latlng, {color: 'red', weight: 1, fillOpacity: 0.5}).addTo(robotGroup);
-                    } else {
-                        L.polygon(section.latlng, {color: 'white', weight: 1, fillOpacity: 0.5}).addTo(robotGroup);
+                if (followRobot) {
+                    if (!isCoordinateVisible(robotLocation.latlng[0], robotLocation.latlng[1])) {
+                        map.setView(robotLocation.latlng);
                     }
-                } 
-            } 
+                }
 
-            
-            // Follow robot
-            if (followRobot) {
-                // Update position when robot is not in the field of view
-                if (!isCoordinateVisible(robotLocation.latlng[0], robotLocation.latlng[1])) {
-                    map.setView(robotLocation.latlng);
+                if (directRobot) {
+                    map.setBearing(robotHeading);
                 }
             }
 
-            // direct robot
-            if (directRobot) {
-                map.setBearing(robotHeading);
-            }
+            if (data.controller_info && data.controller_info.current) {
+                let currentPoint = data.controller_info.current.latlng;
+                let carrotPoint = data.controller_info.carrot.latlng;
+                let closestPoint = data.controller_info.closest.latlng;
+                
+                L.circleMarker(currentPoint, {color: 'transparant', fillColor: 'green', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
+                L.circleMarker(carrotPoint, {color: 'transparant', fillColor: 'green', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
+                L.circleMarker(closestPoint, {color: 'transparant', fillColor: 'green', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
 
+                let headCurrentPoint = data.controller_info.headCurrent.latlng;
+                let headClosestPoint = data.controller_info.headClosest.latlng;
+                
+                L.circleMarker(headCurrentPoint, {color: 'transparant', fillColor: 'green', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup);
+                L.circleMarker(headClosestPoint, {color: 'transparant', fillColor: 'green', fillOpacity: 0.8, radius: 1.5}).addTo(robotGroup); 
+            }
         };
 
         // Drive functionality with the arrows during simulation/command mode
@@ -456,21 +401,19 @@
 
         // * Edit field
         $('#edit-field-button').click(function () {
-            editField = !editField;
-            if (editField) {
-                $('#map-container').css('width', '0%')
-                $('#edit-field-button').removeClass('btn-outline-secondary').addClass('btn-secondary');
-                $('#edit-field-container').css('display', 'block');
-            } else {
-                $('#map-container').css('width', '100%')
-                $('#edit-field-button').removeClass('btn-secondary').addClass('btn-outline-secondary');
-                $('#edit-field-container').css('display', 'none');
-                $('#button-upload').attr('disabled', true);
-                clearTrajectPanel();
-                clearPolygonPanel();
-                overlayGroup.clearLayers();
+            window.location.href = "{% url 'core:field_edit' %}?name={{ field_name }}";
+        });
+
+        // * Reset task
+        $('#reset-task-button').click(function () {
+            if (confirm('Are you sure you want to reset the task?')) {
+                fetch("{% url 'core:reset_task' %}", {
+                    method: 'POST',
+                    body: new FormData($('#reset-task-form')[0])
+                });
             }
         });
+
 
         // * Simulation
         $('#simulation-form').on('change', function(e) {
@@ -565,19 +508,18 @@
         $('#map-edit-upload-form').on('submit', function (e) {
             e.preventDefault();
 
-            // Add the data
             $('#map-edit-shape-attr').val(editShape);
-            if (editShape == 'traject') {
-                $('#map-edit-geometries-attr').val(JSON.stringify(originalFieldData[editShape].paths));
+            var geometryData;
+            if (editShape === 'traject') {
+                geometryData = fieldData.traject;
+            } else if (editShape === 'geofence') {
+                geometryData = fieldData.geofence;
             } else {
-                if (editShape === 'geofence') {
-                    $('#map-edit-geometries-attr').val(JSON.stringify(originalFieldData[editShape].rings));
-                } else {  // tasks
-                    $('#map-edit-geometries-attr').val(JSON.stringify(originalFieldData.tasks[editShape].geometry.rings));
-                }
+                geometryData = fieldData.tasks[editShape] ? fieldData.tasks[editShape].geometry : { empty: true };
             }
+            $('#map-edit-geometries-attr').val(JSON.stringify(geometryData));
 
-            this.submit()
+            this.submit();
         });
 
         // window functionality
@@ -596,7 +538,7 @@
                 }
             });
         });
-    });
-</script>
+    }); 
 
+</script>
 {% endblock %}

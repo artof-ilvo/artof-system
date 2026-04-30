@@ -1,4 +1,5 @@
 from django.urls import path
+from django.contrib.auth import views as auth_views
 from . import views
 
 app_name = 'system'
@@ -21,5 +22,8 @@ urlpatterns = [
     path('monitor/edit', views.monitor_edit, name='monitor_edit'),
     path('implement/', views.implement, name='implement'),
     path('implement/edit', views.implement_edit, name='implement_edit'),
-    path('implement/remove', views.implement_remove, name='implement_remove')
+    path('implement/remove', views.implement_remove, name='implement_remove'),
+    path('login/', auth_views.LoginView.as_view(template_name='system/login.html'), name='login'),
+    path('logout/', auth_views.LogoutView.as_view(next_page='core:field'), name='logout'),
+    path('settings/account/', views.edit_account, name='edit_account'),
 ]
