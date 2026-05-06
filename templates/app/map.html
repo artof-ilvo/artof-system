@@ -367,7 +367,7 @@
                 let implement = data.implements[implementName];
                 for (let i=0; i < implement.sections.length; i++) {
                     let section = implement.sections[i];
-                    if (section.active) {
+                    if (section.rate > 0) {
                         L.polygon(section.latlng, {color: 'red', weight: 1, fillOpacity: 0.5}).addTo(robotGroup);
                     } else {
                         L.polygon(section.latlng, {color: 'white', weight: 1, fillOpacity: 0.5}).addTo(robotGroup);
