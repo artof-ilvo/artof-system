@@ -49,7 +49,7 @@ PORT=8000
 
 ## Create test image (locally)
 ```
-docker build .
+docker build -t axelwillekens/artof-system:sqat .
 docker run -d \
   --name artof-system \
   --restart=on-failure:3 \
@@ -57,6 +57,13 @@ docker run -d \
   -v /var/lib/ilvo:/var/lib/ilvo \
   axelwillekens/artof-system
 ```
+
+## Save image locally and copy it to another device
+```
+docker save -o <path for generated tar file> <image name>
+docker load -i <path to image tar file>
+```
+
 
 
 ## Licence

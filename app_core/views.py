@@ -170,7 +170,7 @@ def field_edit_task(request):
     task = json.loads(request.POST.get('data'))
     input_mode = request.POST.get('input_mode')
 
-    geometries = None if input_mode == 'original' else task['geometry']['latlng']
+    geometries = None if input_mode == 'original' else task['geometry']['latlng'] # TODO: does not copy the original fields of the geometry!
     task_info = TaskInfo(name=task['name'], type=task['type'], implement='' if not task['implement'] else task['implement'], hitch=task['hitch'])
     field.update_task(task['name'], geometries, task_info, epsg=4326)
     
