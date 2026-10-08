@@ -1,4 +1,6 @@
-{% extends "app/base.html" %} {% block title %} Field {% endblock %}
+{% extends "app/base.html" %}
+{% load static %}
+{% block title %}Field{% endblock %}
 {% block content %}
 
 <h2 class="mb-2">Field</h2>
@@ -16,7 +18,7 @@
 </div>
 
 <div class="table-responsive">
-<table class="table w-100">
+<table class="table w-100" id="field-table">
     <thead>
       <tr>
         <th scope="col">Name</th>
@@ -26,19 +28,19 @@
     </thead>
     <tbody>
     {% for fieldName in fields %}
-    <tr id="{{ fieldName }}_row">
+    <tr>
         <td>
-            <div class="btn-group button-group d-flex">
+            <div class="btn-group button-group d-flex align-items-center">
                 <form method="GET" action="{% url 'core:field_select' %}">
                     <button type="submit" class="btn btn-success" name="name" value="{{ fieldName }}" {% if current_field == fieldName %}disabled{% endif %}>
                         {% include "icons/check2.html" %}
                     </button>
                 </form>
-                <label class="label {% if current_field == fieldName %}disabled{% endif %}" 
-                {% if current_field == fieldName %}disabled{% endif %} for="{{ fieldName }}"" {% if current_field == fieldName %}style="font-weight: bold;"{% endif %}>{{ fieldName }}</label>
-                <form id="{{ fieldName }}" method="GET" action="{% url 'core:field_select' %}">
-                    <input type="hidden" name="name" value="{{ fieldName }}">
-                </form>
+                {% if current_field == fieldName %}
+                    <span class="fw-bold fs-4 ps-2">{{ fieldName }}</span>
+                {% else %}
+                    <a class="link-body-emphasis text-decoration-none fs-4 ps-2" href="{% url 'core:field_select' %}?name={{ fieldName|urlencode }}">{{ fieldName }}</a>
+                {% endif %}
             </div>
         </td>
         <td>
@@ -57,10 +59,10 @@
         </td>
         <td>
             <div class="btn-group button-group">
-                <div class="ms-auto" >
-                    <button type="button" class="btn btn-primary" onclick="downloadField('{{ fieldName }}')">
+                <div class="ms-auto">
+                    <a class="btn btn-primary" href="{% url 'core:field_download' %}?name={{ fieldName|urlencode }}" download="{{ fieldName }}.zip">
                         {% include "icons/download.html" %}
-                    </button>
+                    </a>
                 </div>
                 <form method="GET" action="{% url 'core:field_delete' %}">
                     <button type="submit" class="btn btn-danger" name="name" value="{{ fieldName }}" {% if current_field == fieldName %}disabled{% endif %}>
@@ -76,57 +78,10 @@
 </table>
 </div>
 
-<script>
-    function downloadField(fieldName) {
-        fetch('{% url 'core:field_download' %}?name=' + fieldName) 
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.blob();
-        })
-        .then(blob => {
-            // Create a temporary link element
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = fieldName + '.zip';
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-        })
-        .catch(error => {
-            console.error('There was a problem with the fetch operation:', error);
-        });
-    }
+<script type="module">
+    import { bindTableSearch, byId } from '{% static "js/lib/dom.js" %}';
 
-    $(document).ready(function() {
-        $('#search').on('keyup', function() {
-            var filter = $("#search").val().toLowerCase();
-            var trElements = $('.table tbody tr');
-            trElements.each(function() {
-            var text = $(this).text().toLowerCase();
-            if (text.indexOf(filter) > -1) {
-                $(this).show();
-            } else {
-                $(this).hide();
-            }
-            })
-        });
-    });
-
-    document.querySelectorAll('.label:not(.disabled)').forEach(function(label) {
-        label.addEventListener('click', function() {
-            // Find the form associated with this label
-            var formId = label.getAttribute('for');
-            var form = document.getElementById(formId);
-            // Submit the form
-            if (form) {
-                form.submit();
-            }
-        });
-    });
+    bindTableSearch(byId('search'), byId('field-table'));
 </script>
 
 {% endblock %}

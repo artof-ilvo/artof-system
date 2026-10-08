@@ -94,8 +94,14 @@ def field_edit_shapefile(request):
 
     return JsonResponse({'status': 'error', 'message': 'No shapefile'}, status=404)
 
+def with_field_data(context):
+    # Lets templates pass the field to JavaScript safely with the json_script filter
+    context['field_data'] = json.loads(context['field_json'])
+    return context
+
+
 def field_edit_context(field):
-    field_context = field.context
+    field_context = with_field_data(field.context)
 
     field_context['field_name'] = field.name
     field_context['hitch_choices'] = [(hitch.name.value, hitch.name.value) for hitch in robot_manager.hitches.hitches]
@@ -257,7 +263,7 @@ def update_hitch_settings(request):
 # Map
 def map_context():
     robot_manager.load_field()
-    map_context = robot_manager.field.context
+    map_context = with_field_data(robot_manager.field.context)
     map_context['simulation'] = {
         'active': robot_manager.get_simulation_mode(),
         'speed_factor': int(robot_manager.get_simulation_speed_factor())

@@ -1,76 +1,31 @@
-{% extends "system/base.html" %} {% block title %} Editor {% endblock %}
+{% extends "system/base.html" %}
+{% load static %}
+{% block title %}Editor{% endblock %}
 {% block content %}
 
-<form method="POST" action="edit">
+<form method="POST" action="edit" id="editor-form">
     {% csrf_token %}
     <div class="editor-button-container">
-        <button class="btn btn-light" onclick="goBack()" style="float: left">
+        <button type="button" class="btn btn-light" id="back-button" style="float: left" aria-label="Back">
             {% include "icons/arrow-left-short.html" %}
         </button>
-        <input type="text" name="name" value="{{ Name }}" id="editor-job-name">
+        <input type="text" name="name" value="{{ Name }}" id="editor-job-name" aria-label="Name">
     </div>
     <div id="editor-container">
         <div id="line-numbers-container">
             <div id="line-numbers"></div>
         </div>
-        <textarea name="data" id="json-editor" oninput="updateLineNumbers()" onscroll="updateLineNumbers()">{{ Json }}</textarea>
+        <textarea name="data" id="json-editor" spellcheck="false" aria-label="JSON">{{ Json }}</textarea>
     </div>
-    <button id="submitBtn" type="submit" class="btn btn-success" style="float: right; margin-right: 10px;" value="getJSON();">
+    <button id="submitBtn" type="submit" class="btn btn-success" style="float: right; margin-right: 10px;">
         {% include "icons/box-arrow-in-up.html" %} Submit
     </button>
+    <button id="formatBtn" type="button" class="btn btn-primary" style="float: right; margin-right: 10px;">
+        {% include "icons/json.html" %} Format
+    </button>
 </form>
-<button id="formatBtn" class="btn btn-primary" onclick="formatJSON()" style="float: right; margin-right: 10px;">
-    {% include "icons/json.html" %} Format
-</button>
 
-<script type="text/javascript">
-    // Initialize line numbers
-    $(document).ready(function() {
-        formatJSON();
-    })
-
-    $('#json-editor').on('input', function() {
-        updateLineNumbers();
-    });
-
-    function updateLineNumbers() {
-        const textarea = document.getElementById('json-editor');
-        const lineNumbersContainer = document.getElementById('line-numbers-container');
-        const lineNumbers = document.getElementById('line-numbers');
-        const lines = textarea.value.split('\n');
-        lineNumbers.innerHTML = '';
-        for (let i = 0; i < lines.length; i++) {
-            lineNumbers.innerHTML += '<div>' + (i + 1) + '</div>';
-        }
-
-        // Adjust visibility based on the scroll position
-        lineNumbersContainer.scrollTop = textarea.scrollTop;
-        // lineNumbersContainer.style.visibility = (textarea.scrollHeight > textarea.clientHeight) ? 'visible' : 'hidden';
-    }
-
-    function getJSON() {
-        const jsonString = $('#json-editor').val();
-        const jsonObject = JSON.parse(jsonString);
-        return jsonObject;
-    }
-
-    function formatJSON() {
-        console.log("Format json");
-        try {
-            const jsonObject = getJSON();
-            const formattedJSON = JSON.stringify(jsonObject, null, 2);
-            $('#json-editor').val(formattedJSON);
-            updateLineNumbers();
-        } catch (error) {
-            alert('Invalid JSON: ' + error.message);
-        }
-    }
-
-    function goBack() {
-        // Go back one step in the browser history
-        window.history.go(-1);
-    }
-</script>
+<script type="module" src="{% static 'js/pages/editor.js' %}"></script>
 
 <style>
 
@@ -91,8 +46,9 @@
 }
 
 #line-numbers {
-    counter-reset: line;
     display: inline-block;
+    white-space: pre;
+    font-family: 'Courier New', monospace;
 }
 
 #json-editor {

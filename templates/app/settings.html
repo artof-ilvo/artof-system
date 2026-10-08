@@ -1,4 +1,4 @@
-{% extends "app/base.html" %} {% block title %} Settings {% endblock %}
+{% extends "app/base.html" %} {% block title %}Settings{% endblock %}
 {% block content %}
 
 <h2>Settings</h2>
@@ -22,9 +22,9 @@
     {% csrf_token %}
 
     <div class="row mb-2">
-        <label for="navigation-mode-select" style="font-size: 1.2em" class="col-sm-2 col-form-label">Navigation Mode</label>
+        <label for="id_navigation_mode" style="font-size: 1.2em" class="col-sm-2 col-form-label">Navigation Mode</label>
         <div class="col-sm-2">
-            <select name="navigation_mode" class="form-control" id="id_navigation_mode" onchange="submitClosestForm()">
+            <select name="navigation_mode" class="form-control" id="id_navigation_mode" data-autosubmit>
                 {% for id, mode in navigation_mode.modes %}
                     <option value="{{ id }}" {% if navigation_mode.mode == id %}selected{% endif %}>{{ mode }}</option>
                 {% endfor %}
@@ -37,20 +37,5 @@
     {% endfor %}
 </form>
 
-
-<!-- Custom JavaScript for dynamic value display -->
-<script>
-    function updateLabel(value, label_id, unit) {
-        var label = document.getElementById(label_id);
-        label.textContent = value + " " + unit;
-    }
-
-    $(document).ready(function() {
-        $('#id_navigation_mode').change(function() {
-            let form = $(this).closest('form');
-            form.submit();
-        });
-    })
-  </script>
 
 {% endblock %}

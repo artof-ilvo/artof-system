@@ -1,16 +1,17 @@
-{% extends "system/base.html" %} {% block title %} Monitor {% endblock %}
+{% extends "system/base.html" %}
+{% load static %}
+{% block title %}Monitor{% endblock %}
 {% block content %}
 
 <div style="display: flex; margin-top: 10px">
     <h2>Monitor</h2>
     <div class="form-inline my-2 my-lg-0" style="margin-left: auto;">
         <input class="form-control me-2 sm-2" type="search" placeholder="Search" aria-label="Search" id="search">
-        <!-- button class="btn btn-outline-success my-2 my-sm-0" onclick="search()">Search</button -->
     </div>
 </div>
 
 <div class="table-responsive">
-  <table class="table table-striped">
+  <table class="table table-striped" id="monitor-table" data-edit-url="{% url 'system:monitor_edit' %}">
     <thead>
       <tr>
         <th scope="col">Variable</th>
@@ -22,28 +23,28 @@
     </thead>
     <tbody>
     {% for full_name, variable in variables.items %}
-      <tr id="{{ full_name }}_row">
-        <td><label name="name">{{ full_name }}</label></td> 
-        <td id="{{ full_name }}.type">{{ variable.type }}</td>
-        <td id="{{ full_name }}"></td>
+      <tr data-variable="{{ full_name }}" data-type="{{ variable.type }}">
+        <td>{{ full_name }}</td>
+        <td>{{ variable.type }}</td>
+        <td data-value></td>
         <td>
           {% if variable.type == "string" %}
-          <input class="form-control monitor-input" type="text" value="{{ variable.default }}" id="{{ full_name }}.id">
+          <input class="form-control monitor-input" type="text" value="{{ variable.default }}" aria-label="New value" data-edit>
           {% elif variable.type == "bool" %}
-          <input type="checkbox" value="{{ variable.default }}" id="{{ full_name }}.id">
+          <input type="checkbox" aria-label="New value" data-edit>
           {% elif "int" in variable.type %}
-          <input class="form-control monitor-input" type="number" value="{{ variable.default }}" id="{{ full_name }}.id">
-          {% elif variable.type in "float,double" %}   
-          <input class="form-control monitor-input" type="number" step="0.01" value="{{ variable.default }}" id="{{ full_name }}.id">
+          <input class="form-control monitor-input" type="number" value="{{ variable.default }}" aria-label="New value" data-edit>
+          {% elif variable.type in "float,double" %}
+          <input class="form-control monitor-input" type="number" step="0.01" value="{{ variable.default }}" aria-label="New value" data-edit>
           {% endif %}
         </td>
         <td>
           <div class="btn-group button-group">
-          <div style="margin-left: auto;">
-              <button onclick="updateRedisValue('{{full_name}}')" class="btn btn-outline-secondary" name="name" value="{{ variable.Name }}" type="button">
+            <div class="ms-auto">
+              <button class="btn btn-outline-secondary" type="button" data-upload aria-label="Write value">
                 {% include "icons/cloud-upload.html" %}
               </button>
-          </div>
+            </div>
           </div>
         </td>
       </tr>
@@ -52,105 +53,13 @@
   </table>
 </div>
 
-  <script>
-    function updateRedisValue(name) {
-      let variableId = name + ".id";
-      variableId = variableId.replace(/\./g, '\\.');
-      let type = $('#' + variableId).prop('type');
-      let value;
+<style>
+  .monitor-input {
+    border-radius: 5px;
+    min-width: 5em;
+  }
+</style>
 
-      if (type === 'checkbox') {
-        value = $('#' + variableId).prop('checked');
-      } else {
-        value = $('#' + variableId).val();
-      }
-
-      if (value !== '') {
-        fetch("{% url 'system:monitor_edit' %}", {
-          method: 'POST',
-          body: JSON.stringify({
-              'name': name,
-              'value': value
-          }),
-          headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': '{{ csrf_token }}'
-          }
-        });
-      } else {
-        console.log(name, 'is empty');
-      }
-    }
-
-
-    function formatVariable(name, value) {
-      let typeId = name + ".type";
-      typeId = typeId.replace(/\./g, '\\.');
-      const type = $("#"+typeId).text();
-      if (type == "string") {
-        return value;
-      } else if (type == "bool") {
-        return value ? "true" : "false";
-      } else if (type.includes("int")) {
-        return value.toFixed(0);
-      } else if (["float","double"].includes(type)) {
-        return value.toFixed(5);
-      }
-    }
-
-    $(document).ready(function () {
-      // Get the host and port dynamically
-      var host = window.location.hostname;
-      var port = window.location.port;
-      var url = "/ws/redis/";
-
-      // Choose the appropriate protocol based on whether it's secure (https) or not
-      var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      
-      // WebSocket URL
-      var wsUrlRedis = protocol + '//' + host + (port ? ':' + port : '') + url;
-
-
-      // Use the value in JavaScript
-      console.log('Redis webSocket url:', wsUrlRedis);
-
-      const ws_redis = new ReconnectingWebSocket(wsUrlRedis);
-
-      ws_redis.onmessage = (event) => {
-        let data = JSON.parse(event.data)
-        for (const variableName in data.variables) {
-          if (data.variables.hasOwnProperty(variableName)) {
-            let variableId = variableName.replace(/\./g, '\\.');
-            $("#"+variableId).text(formatVariable(variableName, data.variables[variableName]));
-          }
-        }
-      };
-
-      $('#search').on('keyup', function() {
-        var filter = $("#search").val().toLowerCase();
-        var trElements = $('.table tbody tr');
-        trElements.each(function() {
-          var text = $(this).text().toLowerCase();
-          if (text.indexOf(filter) > -1) {
-            $(this).show();
-          } else {
-            $(this).hide();
-          }
-        })
-      });
-  });
-  </script>
-
-  <style>
-    .monitor-input {
-      border-color: var(--color-light);
-      border-radius: 5px;
-      min-width: 5em;
-    }
-
-    #monitor-input:focus {
-      outline: none !important;
-    }
-  </style>
+<script type="module" src="{% static 'js/pages/monitor.js' %}"></script>
 
 {% endblock %}

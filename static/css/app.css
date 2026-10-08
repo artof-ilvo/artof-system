@@ -1,0 +1,64 @@
+/* Styles shared by the app and system pages and the templates in templates/components/. */
+
+/* Button group */
+.button-group {
+    display: flex;
+    gap: 10px;
+}
+
+.button-group button {
+    padding: 8px 10px;
+    border-radius: 5px;
+    font-size: small;
+}
+
+.button-group label {
+    padding-left: 10px;
+    vertical-align: center;
+    font-size: x-large;
+}
+
+/* components/input_number.html, components/input_int.html */
+.flex-1 {
+    flex: 1;
+    gap: .5rem;
+}
+
+/* components/radio_multiple.html */
+.radio-group {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.25em;
+}
+
+/* components/select_row.html */
+.container-group {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+
+.container-group > button {
+    flex: 1;
+}
+
+.traject-group {
+    display: flex;
+    flex-direction: row;
+}
+
+/* Notification toast */
+.toast-container-fixed {
+    position: absolute;
+    bottom: 1em;
+    right: 1em;
+    z-index: 1000;
+}
+
+@media screen and (max-width: 390px) {
+    .toast {
+        width: 200px;
+    }
+}
