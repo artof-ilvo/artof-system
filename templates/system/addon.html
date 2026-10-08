@@ -1,72 +1,63 @@
-{% extends "system/base.html" %} {% block title %} Addons {% endblock %}
+{% extends "system/base.html" %} {% block title %}Addons{% endblock %}
 {% block content %}
-<form method="GET" action="{% url 'system:edit_addon' %}" style="display: flex; padding: 10px;">
-  <h2>Addon</h2>
-  <button type="submit" class="btn btn-primary ms-auto my-2" name="name" value="new_addon">
-    {% include "icons/plus.html" %} Add
-  </button>
-</form>
 
-<div class="table-responsive">
-<table class="table">
-  <thead>
-    <tr>
-      <th scope="col">#</th>
-      <th scope="col">Id</th>
-      <th scope="col">Name</th>
-      <th scope="col">Start Time</th>
-      <th scope="col">Status</th>
-      <th scope="col">Actions</th>
-      <th scope="col">Edit</th>
-      <th scope="col" class="text-right">Delete</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for addon in addons %}
-    <tr>
-      <th scope="row">{{ addon.Idx }}</th>
-      <td>{{ addon.ContainerId }}</td>
-      <td>{{ addon.Name }}</td>
-      <td>{{ addon.StartTime }}</td>
-      <td>{{ addon.Status }}</td>
-      <td>
-        <div class="btn-group button-group">
-          <form method="GET" action="{% url 'system:start_addon' %}">
-            <button type="submit" class="btn btn-outline-success" name="name" value="{{ addon.Name }}">
-              {% include "icons/play.html" %}
-            </button>
-          </form>
-          <form method="GET" action="{% url 'system:stop_addon' %}">
-            <button type="submit" class="btn btn-outline-danger" name="name" value="{{ addon.Name }}">
-              {% include "icons/stop.html" %}
-            </button>
-          </form>
-          <form method="GET" action="{% url 'system:update_addon' %}">
-            <button type="submit" class="btn btn-outline-secondary" name="name" value="{{ addon.Name }}">
-              {% include "icons/arrow-repeat.html" %}
-            </button>
-          </form>
-        </div>
-      </td>
-      <td>
-        <form method="GET" action="{% url 'system:edit_addon' %}">
-          <button type="submit" class="btn btn-outline-primary" name="name" value="{{ addon.Name }}">
-            {% include "icons/pen.html" %}
-          </button>
-        </form>
-      </td>
-      <td class="text-right">
-        <form method="GET" action="{% url 'system:delete_addon' %}">
-          <button type="submit" class="btn btn-outline-danger" name="name" value="{{ addon.Name }}">
-            {% include "icons/trash.html" %}
-          </button>
-        </form>
-      </td>
-    </tr>
-  {% endfor %}
+<div class="page-header">
+  <div>
+    <h1>Addons</h1>
+    <p class="page-subtitle">Docker containers that extend the robot.</p>
+  </div>
+  <form method="GET" action="{% url 'system:edit_addon' %}" class="m-0" data-busy>
+    <button type="submit" class="btn btn-primary" name="name" value="new_addon">{% include "icons/plus.html" %} Add addon</button>
+  </form>
+</div>
 
-  </tbody>
-</table>
+<div class="card">
+  <table class="table table-modern table-hover table-cards">
+    <thead>
+      <tr>
+        <th scope="col">#</th>
+        <th scope="col">Name</th>
+        <th scope="col">Container</th>
+        <th scope="col">Started</th>
+        <th scope="col">Status</th>
+        <th scope="col" class="text-end">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for addon in addons %}
+      <tr>
+        <td data-label="#" class="text-body-secondary">{{ addon.Idx }}</td>
+        <td data-label="Name" class="fw-semibold">{{ addon.Name }}</td>
+        <td data-label="Container" class="font-monospace small">{{ addon.ContainerId|default:"–" }}</td>
+        <td data-label="Started" class="small">{{ addon.StartTime|default:"–" }}</td>
+        <td data-label="Status">
+          <span class="status-badge {% if addon.Status == 'Running' %}status-running{% else %}status-stopped{% endif %}">{{ addon.Status }}</span>
+        </td>
+        <td>
+          <div class="row-actions">
+            <form method="GET" action="{% url 'system:start_addon' %}" data-busy>
+              <button type="submit" class="btn btn-ghost text-success btn-icon" name="name" value="{{ addon.Name }}" title="Start" aria-label="Start {{ addon.Name }}">{% include "icons/play.html" %}</button>
+            </form>
+            <form method="GET" action="{% url 'system:stop_addon' %}" data-busy>
+              <button type="submit" class="btn btn-ghost text-danger btn-icon" name="name" value="{{ addon.Name }}" title="Stop" aria-label="Stop {{ addon.Name }}">{% include "icons/stop.html" %}</button>
+            </form>
+            <form method="GET" action="{% url 'system:update_addon' %}" data-busy>
+              <button type="submit" class="btn btn-ghost btn-icon" name="name" value="{{ addon.Name }}" title="Update" aria-label="Update {{ addon.Name }}">{% include "icons/arrow-repeat.html" %}</button>
+            </form>
+            <form method="GET" action="{% url 'system:edit_addon' %}" data-busy>
+              <button type="submit" class="btn btn-ghost btn-icon" name="name" value="{{ addon.Name }}" title="Edit" aria-label="Edit {{ addon.Name }}">{% include "icons/pen.html" %}</button>
+            </form>
+            <form method="GET" action="{% url 'system:delete_addon' %}" data-busy data-confirm="Delete addon “{{ addon.Name }}”?">
+              <button type="submit" class="btn btn-ghost text-danger btn-icon" name="name" value="{{ addon.Name }}" title="Delete" aria-label="Delete {{ addon.Name }}">{% include "icons/trash.html" %}</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="text-center text-body-secondary py-4">No addons installed.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
 </div>
 
 {% endblock %}

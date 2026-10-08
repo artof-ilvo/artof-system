@@ -1,8 +1,10 @@
 from django.shortcuts import render, redirect
 from django.urls import reverse
-from django.http import HttpResponse, JsonResponse
+from django.http import FileResponse, HttpResponse, JsonResponse
 from artof_utils.robot import robot_manager
-from artof_utils.schemas.field import Fields, Field
+from artof_utils.redis_instance import redis_server
+from artof_utils import as_applied
+from artof_utils.schemas.field import Fields, Field, get_current_field_name, get_field_names
 from artof_utils.schemas.task import TaskInfo
 from artof_utils.helpers import traject
 from artof_utils.helpers import polygon
@@ -11,6 +13,10 @@ from artof_utils.helpers import shape as shp
 from artof_utils.schemas.settings import HitchName
 import artof_utils.paths as paths
 from .forms.multifileinput import FileFieldForm
+from .utils import applied as applied_layers
+from .utils.shapefiles import (ShapefileError, load_uploaded_gdf, prepare_upload, preserving_attributes,
+                               set_task_attribute, sync_geom_type, task_attribute, task_geom_type, utm_crs,
+                               xy_to_crs)
 from glob import glob
 from os import path, walk
 import json
@@ -81,21 +87,36 @@ def delete_new_field(request):
     return redirect(reverse('core:field'))
 
 # Field Edit
+def shapefile_error(error):
+    message = str(error) or 'The shape could not be saved.'
+    return JsonResponse({'status': 'error', 'message': message}, status=400)
+
+def uploaded_shape(request, geom_type):
+    # The shapefile uploaded with a save in 'file' mode, with its attributes and coordinate system
+    gdf, _ = prepare_upload(load_uploaded_gdf(request.FILES.getlist('files')), geom_type)
+    return gdf
+
 def field_edit_shapefile(request):
+    # Preview of an uploaded shapefile; the files are uploaded again when the shape is saved
     if request.method == 'POST':
         form = FileFieldForm(request.POST, request.FILES, prefix=None)
         if form.is_valid():
-            shp_file = form.load_shapefile()
-            context = shp_file.context
-            if context:
-                return JsonResponse(shp_file.context)
-            else:
-                return JsonResponse({'status': 'error', 'message': 'Invalid shapefile'}, status=404)
+            try:
+                shp_file, note = form.load_shapefile()
+            except ShapefileError as error:
+                return shapefile_error(error)
+            return JsonResponse({**shp_file.context, 'note': note})
 
-    return JsonResponse({'status': 'error', 'message': 'No shapefile'}, status=404)
+    return JsonResponse({'status': 'error', 'message': 'No shapefile was uploaded.'}, status=400)
+
+def with_field_data(context):
+    # Lets templates pass the field to JavaScript safely with the json_script filter
+    context['field_data'] = json.loads(context['field_json'])
+    return context
+
 
 def field_edit_context(field):
-    field_context = field.context
+    field_context = with_field_data(field.context)
 
     field_context['field_name'] = field.name
     field_context['hitch_choices'] = [(hitch.name.value, hitch.name.value) for hitch in robot_manager.hitches.hitches]
@@ -136,12 +157,18 @@ def field_edit_geofence(request):
     data = json.loads(request.POST.get('data'))
     input_mode = request.POST.get('input_mode')
 
-    if data['empty'] or input_mode == 'drive':
-        latlng = [[0, 0], [0.0, 10.0], [10.0, 10.0], [10.0, 0.0], [0.0, 0.0]]
-        field.update_traject(latlng, epsg=32631)
-    else:
-        latlng = data['latlng']
-        field.update_geofence(latlng, epsg=4326)
+    try:
+        if input_mode == 'file':
+            field.update_geofence(uploaded_shape(request, 'Polygon'))
+            sync_geom_type(field.shp_geofence)
+        elif input_mode != 'original':
+            if data['empty'] or input_mode == 'drive':
+                latlng, epsg = [[0, 0], [0.0, 10.0], [10.0, 10.0], [10.0, 0.0], [0.0, 0.0]], 32631
+            else:
+                latlng, epsg = data['latlng'], 4326
+            preserving_attributes(field.shp_geofence, lambda: field.update_geofence(latlng, epsg=epsg))
+    except (ShapefileError, AssertionError) as error:
+        return shapefile_error(error)
 
     return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
 
@@ -153,12 +180,18 @@ def field_edit_traject(request):
     data = json.loads(request.POST.get('data'))
     input_mode = request.POST.get('input_mode')
 
-    if data['empty'] or input_mode == 'drive':
-        latlng = [[0, 0], [10.0, 10.0]]
-        field.update_traject(latlng, epsg=32631)
-    else:
-        latlng = data['latlng']
-        field.update_traject(latlng, epsg=4326)
+    try:
+        if input_mode == 'file':
+            field.update_traject(uploaded_shape(request, 'LineString'))
+            sync_geom_type(field.shp_traject)
+        elif input_mode != 'original':
+            if data['empty'] or input_mode == 'drive':
+                latlng, epsg = [[0, 0], [10.0, 10.0]], 32631
+            else:
+                latlng, epsg = data['latlng'], 4326
+            preserving_attributes(field.shp_traject, lambda: field.update_traject(latlng, epsg=epsg))
+    except (ShapefileError, AssertionError) as error:
+        return shapefile_error(error)
 
     return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
 
@@ -169,12 +202,43 @@ def field_edit_task(request):
 
     task = json.loads(request.POST.get('data'))
     input_mode = request.POST.get('input_mode')
+    task_name = task['name']
+    task_info = TaskInfo(name=task_name, type=task['type'], implement='' if not task['implement'] else task['implement'], hitch=task['hitch'])
 
-    geometries = None if input_mode == 'original' else task['geometry']['latlng']
-    task_info = TaskInfo(name=task['name'], type=task['type'], implement='' if not task['implement'] else task['implement'], hitch=task['hitch'])
-    field.update_task(task['name'], geometries, task_info, epsg=4326)
-    
+    try:
+        if input_mode == 'file':
+            field.update_task(task_name, uploaded_shape(request, task_geom_type(task_info.type)), task_info)
+            sync_geom_type(field.get_task(task_name).shp_task)
+        elif input_mode == 'original':
+            field.update_task(task_name, None, task_info)
+        else:
+            shapefile = field.get_task(task_name).shp_task
+            preserving_attributes(shapefile, lambda: field.update_task(task_name, task['geometry']['latlng'], task_info, epsg=4326))
+        # Store the default rate/routine for features that have none
+        set_task_attribute(field.get_task(task_name))
+    except (ShapefileError, AssertionError) as error:
+        return shapefile_error(error)
+
     return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
+
+
+def field_edit_task_attribute(request):
+    # GET: the rate/routine per feature of a task; POST: store new values ({field_name, task_name, values})
+    params = json.loads(request.body) if request.method == 'POST' else request.GET
+    task = Field(params.get('field_name')).get_task(params.get('task_name'))
+    if task is None:
+        return JsonResponse({'status': 'error', 'message': 'Unknown task.'}, status=404)
+
+    if request.method == 'POST':
+        try:
+            set_task_attribute(task, params.get('values', []))
+        except ShapefileError as error:
+            return shapefile_error(error)
+        # Let the robot reload its active field, as for edits on the map page
+        if params.get('field_name') == get_current_field_name():
+            robot_manager.update_field()
+
+    return JsonResponse({'attribute': task_attribute(task)})
 
 
 def field_edit(request):
@@ -255,13 +319,29 @@ def update_hitch_settings(request):
     return settings(request)
 
 # Map
+def geometry_in_utm(geometry):
+    # The map editor (operations, rows, drive-in) works in the robot's UTM coordinates,
+    # also for shapes that are stored in another coordinate system
+    if geometry.get('empty') or not geometry.get('wkid'):
+        return
+    target = utm_crs()
+    for key in ('paths', 'rings', 'points'):
+        if key in geometry:
+            geometry[key] = xy_to_crs(geometry[key], 'EPSG:%d' % geometry['wkid'], target)
+    geometry['wkid'] = target.to_epsg()
+
 def map_context():
     robot_manager.load_field()
-    map_context = robot_manager.field.context
+    map_context = with_field_data(robot_manager.field.context)
+    field_data = map_context['field_data']
+    for geometry in [field_data['traject'], field_data['geofence']] + [t['geometry'] for t in field_data['tasks'].values()]:
+        geometry_in_utm(geometry)
     map_context['simulation'] = {
         'active': robot_manager.get_simulation_mode(),
         'speed_factor': int(robot_manager.get_simulation_speed_factor())
     }
+    map_context['as_applied_recording'] = as_applied.is_recording(redis_server)
+    map_context['as_applied_auto'] = as_applied.auto_mode_active(redis_server)
 
     return map_context
 
@@ -282,16 +362,60 @@ def map_simulation_position(request):
     robot_manager.set_position_latlon(data['lat'], data['lon'])
     return HttpResponse()
 
+def as_applied_state():
+    """Recording flag, session being recorded, whether the task-map addon runs and whether auto mode drives the flag."""
+    # pc.as_applied.session is a string in config.json, so artof-core initialises it to '-' when it is nil
+    session = (redis_server.r.get(as_applied.REDIS_SESSION) or b'').decode()
+    return {
+        'recording': as_applied.is_recording(redis_server),
+        'auto_mode': as_applied.auto_mode_active(redis_server),
+        'active_session': session if as_applied.SESSION_PATTERN.match(session) else '',
+        'addon_running': as_applied.recorder_alive(redis_server),
+    }
+
+def map_as_applied_record(request):
+    # In auto mode the task-map addon keeps recording on; it is only toggled by hand outside auto mode
+    if as_applied.auto_mode_active(redis_server):
+        return JsonResponse({'message': 'Recording follows auto mode: it stops when the robot leaves auto mode.',
+                             **as_applied_state()}, status=409)
+    as_applied.set_recording(redis_server, request.POST.get("record") == "on")
+    return JsonResponse(as_applied_state())
+
+def map_as_applied_sessions(request):
+    """Recorded sessions of the current field (newest first) and the recording state."""
+    field_name = get_current_field_name()
+    return JsonResponse({'field': field_name, 'sessions': as_applied.list_sessions(field_name), **as_applied_state()})
+
+def map_as_applied(request):
+    """GeoJSON (WGS84) of the sections of a session; `skip` leaves out the features the client already has."""
+    session = request.GET.get('session', '')
+    skip = max(int(request.GET.get('skip', 0) or 0), 0)
+    try:
+        gdf = as_applied.read_layer(get_current_field_name(), session, as_applied.SECTIONS, skip=skip)
+    except ValueError as error:
+        return JsonResponse({'message': str(error)}, status=400)
+    except Exception:
+        return JsonResponse({'message': "As-applied session '%s' could not be read" % session}, status=404)
+    return HttpResponse(gdf.to_crs('EPSG:4326').to_json(drop_id=True), content_type='application/json')
+
+
 def map_edit_shape(request):
     shape = request.POST.get('shape')
-    geometries = json.loads(request.POST.get('geometries'))
+    geometries = json.loads(request.POST.get('geometries'))  # in UTM, see geometry_in_utm
+    field = robot_manager.field
 
     if shape == 'traject':
-        robot_manager.field.update_traject(geometries=geometries[0])
+        shapefile, update = field.shp_traject, field.update_traject
+        geometries = geometries[0]
     elif shape == 'geofence':
-        robot_manager.field.update_geofence(geometries=geometries)
+        shapefile, update = field.shp_geofence, field.update_geofence
     else:  # tasks
-        robot_manager.field.update_task(task_name=shape, geometries=geometries)
+        shapefile = field.get_task(shape).shp_task
+        update = lambda geometries: field.update_task(task_name=shape, geometries=geometries)
+
+    # Store in the shapefile's own coordinate system and keep its attributes
+    geometries = xy_to_crs(geometries, utm_crs(), shapefile.gdf.crs)
+    preserving_attributes(shapefile, lambda: update(geometries=geometries))
 
     robot_manager.update_field()
     return redirect(reverse('core:map'))
@@ -343,3 +467,79 @@ def map_edit_traject_rows(request):
         traject_rows_latlng.append(shp.transform_crs(utm_crs, wgs84_crs, traject_row))
 
     return JsonResponse({'latlng': traject_rows_latlng})
+
+
+# As-applied sessions (Applied page)
+def applied_field_name(request):
+    """Field asked for in the request (GET `field`), or the robot's current field."""
+    field_name = request.GET.get('field') or get_current_field_name()
+    if field_name not in get_field_names():
+        raise applied_layers.AppliedError("Field '%s' does not exist" % field_name)
+    return field_name
+
+def applied_request(view):
+    """Answers AppliedError (bad field, session, layer, attribute or filter) as JSON {message} with status 400."""
+    def wrapper(request):
+        try:
+            return view(request, applied_field_name(request), request.GET.get('session', ''), request.GET.get('layer', ''))
+        except applied_layers.AppliedError as error:
+            return JsonResponse({'message': str(error)}, status=400)
+    return wrapper
+
+def applied(request):
+    try:
+        field_name = applied_field_name(request)
+    except applied_layers.AppliedError:
+        return redirect(reverse('core:applied'))
+    field = robot_manager.field if field_name == robot_manager.field.name else Field(field_name)
+    context = with_field_data(field.context)
+    context['applied_field'] = field_name
+    context['field_names'] = sorted(get_field_names())
+    context['sessions'] = [{'id': session,
+                            'start': as_applied.session_start(session).isoformat(),
+                            'layers': as_applied.session_layers(field_name, session)}
+                           for session in as_applied.list_sessions(field_name)]
+    context['active_session'] = as_applied_state()['active_session']
+    return render(request, "app/applied.html", context=create_context(context))
+
+@applied_request
+def applied_layer(request, field_name, session, layer):
+    """Attribute columns {name: kind} and feature count of a session layer."""
+    columns, count = applied_layers.layer_columns(field_name, session, layer)
+    return JsonResponse({'columns': columns, 'count': count})
+
+@applied_request
+def applied_attribute(request, field_name, session, layer):
+    """Range and distinct values of one attribute (GET `name`)."""
+    return JsonResponse(applied_layers.attribute_summary(field_name, session, layer, request.GET.get('name', '')))
+
+@applied_request
+def applied_features(request, field_name, session, layer):
+    """GeoJSON of the filtered features (GET `color`, `filters` as JSON); counts in X-Shown / X-Total headers."""
+    filters = applied_layers.parse_filters(request.GET.get('filters'))
+    geojson, shown, total = applied_layers.filtered_features(field_name, session, layer, request.GET.get('color', ''),
+                                                              filters)
+    response = HttpResponse(geojson, content_type='application/json')
+    response['X-Shown'], response['X-Total'] = shown, total
+    return response
+
+@applied_request
+def applied_feature(request, field_name, session, layer):
+    """All attributes of one feature (GET `fid`)."""
+    try:
+        fid = int(request.GET.get('fid', ''))
+    except ValueError:
+        raise applied_layers.AppliedError('Invalid feature id')
+    return JsonResponse(applied_layers.feature_properties(field_name, session, layer, fid))
+
+@applied_request
+def applied_download(request, field_name, session, layer):
+    """The layer's GeoPackage, to open in QGIS."""
+    try:
+        file_path = as_applied.layer_path(field_name, session, layer)
+    except ValueError as error:
+        raise applied_layers.AppliedError(str(error))
+    if not path.exists(file_path):
+        raise applied_layers.AppliedError("As-applied session '%s' has no %s layer" % (session, layer))
+    return FileResponse(open(file_path, 'rb'), as_attachment=True,
+                        filename='%s_%s_%s.gpkg' % (field_name, session, layer))

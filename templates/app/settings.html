@@ -1,56 +1,80 @@
-{% extends "app/base.html" %} {% block title %} Settings {% endblock %}
+{% extends "app/base.html" %} {% block title %}Settings{% endblock %}
 {% block content %}
 
-<h2>Settings</h2>
+<div class="page-header">
+    <div>
+        <h1>Settings</h1>
+        <p class="page-subtitle">Changes are applied to the robot as soon as you release a slider.</p>
+    </div>
+</div>
 
-<h3>Hitches</h3>
-<form method="POST" action="{% url 'core:update_hitch_settings' %}" id="update_hitch" enctype="multipart/form-data">
-    {% csrf_token %}
-
-    {% for hitch in hitches %}
-        <div class="d-flex">
-            <div class="container-fluid">
-                {% include 'components/input_slider.html' with name='Hitch '|add:hitch.name base_id=hitch.name initial_value=hitch.setpoint min_value=hitch.min max_value=hitch.max unit='cm' step=1 %}
+<div class="row g-3">
+    <div class="col-xl-5">
+        <div class="card">
+            <div class="card-header"><h2 class="card-title-sm">Hitches</h2></div>
+            <div class="card-body py-1">
+                <form method="POST" action="{% url 'core:update_hitch_settings' %}" id="update_hitch" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    {% for hitch in hitches %}
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="flex-grow-1">
+                                {% include 'components/input_slider.html' with name='Hitch '|add:hitch.name base_id=hitch.name initial_value=hitch.setpoint min_value=hitch.min max_value=hitch.max unit='cm' step=1 %}
+                            </div>
+                            {% include 'components/input_checkbox.html' with text='Float' base_id=hitch.name initial=hitch.float %}
+                        </div>
+                    {% empty %}
+                        <p class="mode-info py-3 m-0">No hitches configured.</p>
+                    {% endfor %}
+                </form>
             </div>
-            {% include 'components/input_checkbox.html' with text='float' base_id=hitch.name initial=hitch.float %}
-        </div>
-    {% endfor %}
-</form>
-
-<h3>Navigation</h3>
-<form method="POST" action="{% url 'core:update_navigation_settings' %}" id="update_navigation" enctype="multipart/form-data">
-    {% csrf_token %}
-
-    <div class="row mb-2">
-        <label for="navigation-mode-select" style="font-size: 1.2em" class="col-sm-2 col-form-label">Navigation Mode</label>
-        <div class="col-sm-2">
-            <select name="navigation_mode" class="form-control" id="id_navigation_mode" onchange="submitClosestForm()">
-                {% for id, mode in navigation_mode.modes %}
-                    <option value="{{ id }}" {% if navigation_mode.mode == id %}selected{% endif %}>{{ mode }}</option>
-                {% endfor %}
-            </select>
         </div>
     </div>
 
-    {% for slider in navigation_sliders %}
-        {% include 'components/input_slider.html' with name=slider.name base_id=slider.base_id initial_value=slider.initial min_value=slider.min max_value=slider.max unit=slider.unit step=slider.step %}
-    {% endfor %}
-</form>
+    <div class="col-xl-7">
+        <div class="card">
+            <div class="card-header"><h2 class="card-title-sm">Navigation</h2></div>
+            <div class="card-body">
+                <form method="POST" action="{% url 'core:update_navigation_settings' %}" id="update_navigation" enctype="multipart/form-data">
+                    {% csrf_token %}
 
+                    <label for="id_navigation_mode" class="field-label d-block">Navigation mode</label>
+                    <select name="navigation_mode" class="form-select mb-3" id="id_navigation_mode" style="max-width: 20rem;" data-autosubmit>
+                        {% for id, mode in navigation_mode.modes %}
+                            <option value="{{ id }}" {% if navigation_mode.mode == id %}selected{% endif %}>{{ mode }}</option>
+                        {% endfor %}
+                    </select>
 
-<!-- Custom JavaScript for dynamic value display -->
-<script>
-    function updateLabel(value, label_id, unit) {
-        var label = document.getElementById(label_id);
-        label.textContent = value + " " + unit;
-    }
+                    <h3 class="field-label text-uppercase mt-3 mb-0">Speed</h3>
+                    {% for slider in navigation_sliders %}
+                        {% if "(" not in slider.name %}
+                            {% include 'components/input_slider.html' with name=slider.name base_id=slider.base_id initial_value=slider.initial min_value=slider.min max_value=slider.max unit=slider.unit step=slider.step %}
+                        {% endif %}
+                    {% endfor %}
 
-    $(document).ready(function() {
-        $('#id_navigation_mode').change(function() {
-            let form = $(this).closest('form');
-            form.submit();
-        });
-    })
-  </script>
+                    <h3 class="field-label text-uppercase mt-4 mb-0">Pure Pursuit</h3>
+                    {% for slider in navigation_sliders %}
+                        {% if "(Pure Pursuit)" in slider.name %}
+                            {% include 'components/input_slider.html' with name=slider.name base_id=slider.base_id initial_value=slider.initial min_value=slider.min max_value=slider.max unit=slider.unit step=slider.step %}
+                        {% endif %}
+                    {% endfor %}
+
+                    <h3 class="field-label text-uppercase mt-4 mb-0">Steady state</h3>
+                    {% for slider in navigation_sliders %}
+                        {% if "(Steady State)" in slider.name %}
+                            {% include 'components/input_slider.html' with name=slider.name base_id=slider.base_id initial_value=slider.initial min_value=slider.min max_value=slider.max unit=slider.unit step=slider.step %}
+                        {% endif %}
+                    {% endfor %}
+
+                    <h3 class="field-label text-uppercase mt-4 mb-0">Rough</h3>
+                    {% for slider in navigation_sliders %}
+                        {% if "(Rough)" in slider.name %}
+                            {% include 'components/input_slider.html' with name=slider.name base_id=slider.base_id initial_value=slider.initial min_value=slider.min max_value=slider.max unit=slider.unit step=slider.step %}
+                        {% endif %}
+                    {% endfor %}
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 
 {% endblock %}

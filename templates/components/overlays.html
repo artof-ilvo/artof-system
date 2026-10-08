@@ -1,0 +1,32 @@
+{# Toasts and the delete confirmation dialog, shared by both base templates. #}
+<div class="toast-stack" id="toast-stack" aria-live="polite">
+  <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" id="robot-toast"
+       {% if not autohide %}data-bs-autohide="false"{% endif %}
+       data-acknowledge-url="{% url 'core:notification_acknowledge' %}">
+    <div class="toast-header">
+      <span class="brand-mark me-2" style="width: 1.5rem; height: 1.5rem;">{% include "icons/robot.html" %}</span>
+      <strong class="me-auto">{{ robot_name|default:"Robot" }}</strong>
+      <small class="text-body-secondary">Just now</small>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body"></div>
+  </div>
+</div>
+
+<div class="modal fade" id="confirm-dialog" tabindex="-1" aria-labelledby="confirm-dialog-title" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-body p-4">
+        <div class="d-flex align-items-center gap-2 mb-2 text-danger">
+          {% include "icons/exclamation-triangle-fill.html" %}
+          <h2 class="h6 m-0" id="confirm-dialog-title">Are you sure?</h2>
+        </div>
+        <p class="m-0 text-body-secondary" data-confirm-message></p>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" data-confirm-accept>Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
