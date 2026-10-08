@@ -619,6 +619,45 @@ input[type="number"] {
     gap: .25rem;
 }
 
+/* Monitor: pinned variables in the sticky toolbar. */
+.monitor-pinned-body {
+    max-height: 40vh;
+    overflow-y: auto;
+}
+
+.monitor-pinned .variable-name {
+    font-weight: 600;
+}
+
+/* Same columns in the pinned card and the full list, so values line up. */
+@media (min-width: 768px) {
+    #monitor-table,
+    #monitor-pinned-table {
+        table-layout: fixed;
+    }
+
+    #monitor-table th:nth-child(1), #monitor-pinned-table td:nth-child(1) { width: 38%; }
+    #monitor-table th:nth-child(2), #monitor-pinned-table td:nth-child(2) { width: 10%; }
+    #monitor-table th:nth-child(3), #monitor-pinned-table td:nth-child(3) { width: 16%; }
+    #monitor-table th:nth-child(4), #monitor-pinned-table td:nth-child(4) { width: 24%; }
+    #monitor-table th:nth-child(5), #monitor-pinned-table td:nth-child(5) { width: 12%; }
+
+    #monitor-table .variable-name,
+    #monitor-pinned-table .variable-name {
+        overflow-wrap: anywhere;
+    }
+}
+
+.pin-toggle .bi-pin-angle-fill,
+.pin-toggle[aria-pressed="true"] .bi-pin-angle {
+    display: none;
+}
+
+.pin-toggle[aria-pressed="true"] .bi-pin-angle-fill {
+    display: inline-block;
+    color: var(--brand);
+}
+
 .row-actions form {
     margin: 0;
 }

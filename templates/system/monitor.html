@@ -7,11 +7,22 @@
   <div class="page-header mb-0">
     <div>
       <h1>Monitor</h1>
-      <p class="page-subtitle">Live Redis variables. Write a new value with the upload button.</p>
+      <p class="page-subtitle">Live Redis variables. Pin variables to keep them in view; write a new value with the upload button.</p>
     </div>
     <div class="search-input">
       {% include "icons/search.html" %}
       <input class="form-control" type="search" placeholder="Search variables" aria-label="Search variables" id="search">
+    </div>
+  </div>
+
+  <!-- Pinned variables stay in view; the pinned set is kept in this browser (localStorage) -->
+  <div class="card mt-2 monitor-pinned" id="monitor-pinned" hidden>
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <h2 class="card-title-sm m-0">Pinned</h2>
+      <button class="btn btn-link btn-sm p-0" type="button" id="monitor-unpin-all">Unpin all</button>
+    </div>
+    <div class="monitor-pinned-body">
+      <table class="table table-modern table-cards mb-0" id="monitor-pinned-table"><tbody></tbody></table>
     </div>
   </div>
 </div>
@@ -46,6 +57,9 @@
         </td>
         <td>
           <div class="row-actions">
+            <button class="btn btn-ghost btn-icon pin-toggle" type="button" data-pin aria-pressed="false" title="Pin to the top" aria-label="Pin {{ full_name }}">
+              {% include "icons/pin-angle.html" %}{% include "icons/pin-angle-fill.html" %}
+            </button>
             <button class="btn btn-ghost btn-icon" type="button" data-upload title="Write value" aria-label="Write value of {{ full_name }}">
               {% include "icons/cloud-upload.html" %}
             </button>
