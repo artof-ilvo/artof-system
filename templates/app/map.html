@@ -25,6 +25,11 @@
                 <input type="checkbox" class="btn-check" id="simulation-check" name="simulation" value="on" autocomplete="off" {% if simulation.active %}checked{% endif %}>
                 <label class="btn btn-outline-secondary fw-bold small" for="simulation-check" title="Simulation">Sim</label>
             </form>
+            <form id="as-applied-record-form" method="POST" action="{% url 'core:map_as_applied_record' %}">
+                {% csrf_token %}
+                <input type="checkbox" class="btn-check" id="as-applied-record-check" name="record" value="on" autocomplete="off" {% if as_applied_recording %}checked{% endif %}>
+                <label class="btn btn-outline-secondary record-toggle" for="as-applied-record-check" title="Record the as-applied map" aria-label="Record the as-applied map">{% include "icons/record-fill.html" %}</label>
+            </form>
         </div>
 
         <form id="simulation-factor-form" class="floating-panel" method="POST" action="{% url 'core:map_simulation_speed' %}" {% if not simulation.active %}style="display: none;"{% endif %}>
@@ -36,6 +41,24 @@
             <div class="toolbar-divider"></div>
             <button id="command-robot-button" type="button" class="btn btn-outline-secondary" title="Drive with the arrow keys and click the map to move the robot" aria-label="Command the simulated robot">{% include "icons/command.html" %}</button>
         </form>
+    </div>
+
+    <!-- As-applied map: session to show, rate legend -->
+    <div class="as-applied-panel floating-panel" id="as-applied-panel"
+         data-sessions-url="{% url 'core:map_as_applied_sessions' %}" data-map-url="{% url 'core:map_as_applied' %}">
+        <div class="as-applied-header">
+            <span class="panel-label">As-applied</span>
+            <span class="as-applied-live" id="as-applied-live" hidden>{% include "icons/record-fill.html" %} Rec</span>
+        </div>
+        <select class="form-select form-select-sm" id="as-applied-select" aria-label="As-applied map to show">
+            <option value="latest">Latest</option>
+            <option value="">Hidden</option>
+        </select>
+        <div class="as-applied-legend" id="as-applied-legend" hidden>
+            <div class="as-applied-ramp" id="as-applied-ramp"></div>
+            <div class="as-applied-scale"><span>0</span><span class="text-body-secondary">rate</span><span id="as-applied-max">100</span></div>
+        </div>
+        <div class="as-applied-warning" id="as-applied-warning" hidden>Task-map addon is not running: nothing is recorded.</div>
     </div>
 </div>
 

@@ -7,6 +7,7 @@ import { drawGeofence, drawTask, drawTraject } from '../../map/field-layers.js';
 import { createMap, isWellInView } from '../../map/robot-map.js';
 import { RobotLayer } from '../../map/robot-layer.js';
 import { TaskAttributeEditor, taskFeature } from '../task-attributes.js';
+import { AsAppliedPanel } from './as-applied-panel.js';
 import { PolygonPanel } from './polygon-panel.js';
 import { ShapeEdit } from './shape-edit.js';
 import { TrajectPanel } from './traject-panel.js';
@@ -50,6 +51,7 @@ class MapPage {
         this.editContainer = byId('edit-field-container');
         this.map = createMap(this.mapContainer, { rotate: true });
         this.drawField();
+        this.asApplied = new AsAppliedPanel(byId('as-applied-panel'), this.map, byId('as-applied-record-form'));
 
         this.robot = new RobotLayer(this.map);
         this.driveInGroup = L.layerGroup().addTo(this.map);

@@ -60,6 +60,7 @@ Server-rendered Django templates + Bootstrap 5 + Leaflet (plugins: rotate-map, p
 - Map code shared by the map and field-edit pages is in `static/js/map/` (`createMap` persists the view in sessionStorage, `RobotLayer` draws the `/ws/robot/` data, `field-layers.js` draws traject/geofence/tasks).
 - Map page editing (`static/js/pages/map/`): `ShapeEdit` holds `server` / `accepted` / `preview` geometry of the selected shape. Traject and polygon operations are computed server-side (`core:map_edit_traject_operation`, `core:map_edit_polygon_operation`) and shown as a dashed preview; check buttons accept, the upload form posts `accepted`. Traject `reverse` returns nested paths, all other operations a single path that the client wraps in `[...]`.
 - Coordinates: geometries carry both projected coordinates (`xy`, `paths`, `rings`, `points` in the field's UTM CRS) and `latlng` (WGS84) for Leaflet.
+- As-applied map (`static/js/pages/map/as-applied-panel.js`): the map toolbar's record toggle sets the Redis flag `pc.as_applied.record`; the separate **task-map addon** (`~/Documents/artof/addons/taskmap-addon`, registered as `taskmap` in `system.ilvoAddons`) does the recording. Sessions are GeoPackages in `field/<field>/as_applied/<implement>_<YYYYmmdd-HHMMSS>.gpkg` (layer `rate`); format, reading and writing live in `artof_utils.as_applied`. The panel polls `core:map_as_applied_sessions` and loads features incrementally from `core:map_as_applied` (`?file=&skip=`, GeoJSON in WGS84).
 
 ## Gotchas
 

@@ -2,6 +2,8 @@ from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.http import HttpResponse, JsonResponse
 from artof_utils.robot import robot_manager
+from artof_utils.redis_instance import redis_server
+from artof_utils import as_applied
 from artof_utils.schemas.field import Fields, Field, get_current_field_name
 from artof_utils.schemas.task import TaskInfo
 from artof_utils.helpers import traject
@@ -337,6 +339,7 @@ def map_context():
         'active': robot_manager.get_simulation_mode(),
         'speed_factor': int(robot_manager.get_simulation_speed_factor())
     }
+    map_context['as_applied_recording'] = as_applied.is_recording(redis_server)
 
     return map_context
 
@@ -356,6 +359,41 @@ def map_simulation_position(request):
     data = json.loads(request.body)
     robot_manager.set_position_latlon(data['lat'], data['lon'])
     return HttpResponse()
+
+def taskmap_addon_running():
+    addons = redis_server.get_json_value("system").get("ilvoAddons", [])
+    return any(addon.get("Name") == "taskmap" and addon.get("Running") for addon in addons)
+
+def map_as_applied_record(request):
+    as_applied.set_recording(redis_server, request.POST.get("record") == "on")
+    return JsonResponse({'recording': as_applied.is_recording(redis_server), 'addon_running': taskmap_addon_running()})
+
+def map_as_applied_sessions(request):
+    """Recorded sessions of the current field (newest first) and the files of the running recording."""
+    field_name = get_current_field_name()
+    try:
+        active_files = json.loads(redis_server.r.get(as_applied.REDIS_FILES) or '[]')
+    except ValueError:
+        active_files = []
+    return JsonResponse({
+        'field': field_name,
+        'sessions': as_applied.list_sessions(field_name),
+        'active_files': active_files,
+        'recording': as_applied.is_recording(redis_server),
+        'addon_running': taskmap_addon_running(),
+    })
+
+def map_as_applied(request):
+    """GeoJSON (WGS84) of an as-applied session; `skip` leaves out the features the client already has."""
+    file_name = request.GET.get('file', '')
+    skip = max(int(request.GET.get('skip', 0) or 0), 0)
+    try:
+        gdf = as_applied.read_session(get_current_field_name(), file_name, skip=skip)
+    except ValueError as error:
+        return JsonResponse({'message': str(error)}, status=400)
+    except Exception:
+        return JsonResponse({'message': "As-applied map '%s' could not be read" % file_name}, status=404)
+    return HttpResponse(gdf.to_crs('EPSG:4326').to_json(drop_id=True), content_type='application/json')
 
 def map_edit_shape(request):
     shape = request.POST.get('shape')
