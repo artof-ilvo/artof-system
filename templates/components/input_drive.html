@@ -1,5 +1,8 @@
-<div class="d-flex w-100" id="{{ base_id }}-drive-in">
-    <button type="button" class="btn btn-outline-secondary" style="width: 5em;" data-drive="start">A</button>
-    <button type="button" class="btn btn-outline-secondary ms-2" style="width: 5em;" data-drive="waypoint" disabled>/</button>
-    <button type="button" class="btn btn-outline-secondary ms-2" style="width: 5em;" data-drive="end" disabled>B</button>
+<div id="{{ base_id }}-drive-in">
+    <p class="mode-info mb-2">Drive the robot and mark the start (A), waypoints (/) and the end (B).</p>
+    <div class="btn-group" role="group" aria-label="Drive in">
+        <button type="button" class="btn btn-outline-secondary px-4" data-drive="start">A</button>
+        <button type="button" class="btn btn-outline-secondary px-4" data-drive="waypoint" disabled>/</button>
+        <button type="button" class="btn btn-outline-secondary px-4" data-drive="end" disabled>B</button>
+    </div>
 </div>

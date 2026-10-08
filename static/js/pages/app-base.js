@@ -1,7 +1,8 @@
 // Shared by every page that extends app/base.html.
+import { initConfirmDialogs } from '../components/confirm-dialog.js';
+import { initFormControls } from '../components/form-controls.js';
 import { NotificationToast, notificationOf } from '../components/notification-toast.js';
 import { StatusBar } from '../components/status-bar.js';
-import { initFormControls } from '../components/form-controls.js';
 import { byId } from '../lib/dom.js';
 import { LiveSocket } from '../lib/live-socket.js';
 
@@ -14,7 +15,5 @@ new LiveSocket('/ws/status/', (status) => {
     if (notification) toast.show(notification);
 });
 
+initConfirmDialogs();
 initFormControls();
-
-// Lets page scripts show messages in the same toast.
-export const notify = (message) => toast.show(message);

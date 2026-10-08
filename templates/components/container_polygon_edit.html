@@ -1,8 +1,10 @@
 <!-- Buffer of the polygons-->
-{% include "components/button_collapse.html" with title="Buffer" base_id="polygon-buffer" %}
-<div class="collapse mt-2" id="collapse-polygon-buffer">
-    <div class="d-flex flex-wrap gap-3">
-        {% include "components/input_number.html" with title="value (m)" base_id="polygon-buffer" step=0.5 %}
-        <button id="accept-polygon-buffer" type="button" class="btn btn-outline-success">{% include "icons/check2.html" %}</button>
+<div class="section">
+    {% include "components/button_collapse.html" with title="Buffer" base_id="polygon-buffer" %}
+    <div class="collapse" id="collapse-polygon-buffer">
+        <div class="section-body d-flex flex-wrap align-items-end gap-3">
+            {% include "components/input_number.html" with title="Distance (m)" base_id="polygon-buffer" step=0.5 %}
+            <button id="accept-polygon-buffer" type="button" class="btn btn-primary">{% include "icons/check2.html" %} Apply</button>
+        </div>
     </div>
 </div>

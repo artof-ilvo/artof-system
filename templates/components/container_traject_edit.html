@@ -4,67 +4,78 @@
 {% include "components/select_row.html" with base_id="traject-rows" %}
 
 <!-- Extension -->
-{% include "components/button_collapse.html" with title="Extension" base_id="traject-extention" %}
-<div class="collapse form-inline mt-2" id="collapse-traject-extention">
-    <div class="w-100 d-flex">
-        {% include "components/radio_multiple.html" with label="Side" options="begin,both,end"|split default="both" base_id="traject-extention" %}
-        <button type="button" class="btn btn-outline-success ms-auto mb-2" data-accept-traject>{% include "icons/check2.html" %}</button>
+<div class="section mt-3">
+    {% include "components/button_collapse.html" with title="Extend rows" base_id="traject-extention" %}
+    <div class="collapse" id="collapse-traject-extention">
+        <div class="section-body stack">
+            {% include "components/radio_multiple.html" with label="Side" options="begin,both,end"|split default="both" base_id="traject-extention" %}
+            <div class="d-flex flex-wrap align-items-end gap-3">
+                {% include "components/input_number.html" with title="Length (m)" base_id="traject-extention" step=1.0 %}
+                <button type="button" class="btn btn-primary" data-accept-traject>{% include "icons/check2.html" %} Apply</button>
+            </div>
+        </div>
     </div>
-    {% include "components/input_number.html" with title="value (m)" base_id="traject-extention" step=1.0 %}
 </div>
 
 <!-- Shift of the rows-->
-{% include "components/button_collapse.html" with title="Shift rows" base_id="traject-shift" %}
-<div class="collapse form-inline mt-2" id="collapse-traject-shift">
-    <div class="w-100 d-flex">
-        {% include "components/input_number.html" with title="value (m)" base_id="traject-shift" step=0.01 %}
-        <button type="button" class="btn btn-outline-success ms-auto mb-2" data-accept-traject>{% include "icons/check2.html" %}</button>
+<div class="section">
+    {% include "components/button_collapse.html" with title="Shift rows" base_id="traject-shift" %}
+    <div class="collapse" id="collapse-traject-shift">
+        <div class="section-body d-flex flex-wrap align-items-end gap-3">
+            {% include "components/input_number.html" with title="Distance (m)" base_id="traject-shift" step=0.01 %}
+            <button type="button" class="btn btn-primary" data-accept-traject>{% include "icons/check2.html" %} Apply</button>
+        </div>
     </div>
 </div>
 
 <!-- Add rows -->
-{% include "components/button_collapse.html" with title="Add new row" base_id="traject-add" %}
-<div class="collapse form-inline mt-2" id="collapse-traject-add">
-    <div class="w-100 d-flex">
-        {% include "components/radio_multiple.html" with label="Side" options="begin,end"|split default="begin" base_id="traject-add" %}
-        {% include "components/input_int.html" with title="" base_id="traject-add-number" default=1 step=1 min=1 max=100 %}
-        <div class="ms-auto">
-            <button id="switch-sign-traject-add" type="button" class="btn btn-outline-secondary ms-auto mb-2">{% include "icons/plus-slash-minus.html" %}</button>
-            <button id="check-traject-add" type="button" class="btn btn-outline-success ms-auto mb-2" disabled>{% include "icons/check2.html" %}</button>
+<div class="section">
+    {% include "components/button_collapse.html" with title="Add rows" base_id="traject-add" %}
+    <div class="collapse" id="collapse-traject-add">
+        <div class="section-body stack">
+            <div class="d-flex flex-wrap align-items-end gap-3">
+                {% include "components/radio_multiple.html" with label="Side" options="begin,end"|split default="begin" base_id="traject-add" %}
+                {% include "components/input_int.html" with title="Number of rows" base_id="traject-add-number" default=1 step=1 min=1 max=100 %}
+            </div>
+            <div class="d-flex flex-wrap align-items-end gap-2">
+                {% include "components/input_number.html" with title="Distance (m)" base_id="traject-add" step=0.01 %}
+                <button id="switch-sign-traject-add" type="button" class="btn btn-outline-secondary btn-icon" title="Flip sign" aria-label="Flip sign">{% include "icons/plus-slash-minus.html" %}</button>
+                <button id="check-traject-add" type="button" class="btn btn-primary" disabled>{% include "icons/check2.html" %} Apply</button>
+            </div>
         </div>
-    </div>
-    <div class="w-100 d-flex">
-        {% include "components/input_number.html" with title="value (m)" base_id="traject-add" step=0.01 %}
     </div>
 </div>
 
 <!-- Remove rows -->
-{% include "components/button_collapse.html" with title="Remove row" base_id="traject-remove" %}
-<div class="collapse mt-2" id="collapse-traject-remove">
-    <div class="d-flex justify-content-end">
-        <button id="button-traject-remove-row" type="button" class="btn btn-outline-danger">{% include "icons/trash.html" %}</button>
+<div class="section">
+    {% include "components/button_collapse.html" with title="Remove rows" base_id="traject-remove" %}
+    <div class="collapse" id="collapse-traject-remove">
+        <div class="section-body d-flex align-items-center justify-content-between gap-3">
+            <span class="mode-info">Removes the rows selected above.</span>
+            <button id="button-traject-remove-row" type="button" class="btn btn-outline-danger">{% include "icons/trash.html" %} Remove</button>
+        </div>
     </div>
 </div>
 
 <!-- change row direction -->
-{% include "components/button_collapse.html" with title="Change directions" base_id="traject-direction" %}
-<div class="collapse mt-2" id="collapse-traject-direction">
-    <div class="me-2">
-        <input type="checkbox" class="btn-check" id="check-traject-reverse" autocomplete="off">
-        <label class="btn btn-outline-secondary mt-2 align-left d-flex" for="check-traject-reverse">
-            <span class="me-2">Reverse</span>{% include "icons/arrow-left-right.html" %}
-        </label>
-    </div>
-    <div class="me-2">
-        <input type="checkbox" class="btn-check" id="check-traject-flip" autocomplete="off">
-        <label class="btn btn-outline-secondary mt-2 align-left d-flex" for="check-traject-flip">
-            <span class="me-2">Flip</span>{% include "icons/arrow-down-up.html" %}
-        </label>
+<div class="section">
+    {% include "components/button_collapse.html" with title="Change direction" base_id="traject-direction" %}
+    <div class="collapse" id="collapse-traject-direction">
+        <div class="section-body d-flex flex-wrap gap-2">
+            <input type="checkbox" class="btn-check" id="check-traject-reverse" autocomplete="off">
+            <label class="btn btn-outline-secondary" for="check-traject-reverse">{% include "icons/arrow-left-right.html" %} Reverse</label>
+            <input type="checkbox" class="btn-check" id="check-traject-flip" autocomplete="off">
+            <label class="btn btn-outline-secondary" for="check-traject-flip">{% include "icons/arrow-down-up.html" %} Flip</label>
+        </div>
     </div>
 </div>
 
 <!-- Drive in -->
-{% include "components/button_collapse.html" with title="Drive in" base_id="traject-drive" %}
-<div class="collapse mt-2" id="collapse-traject-drive">
-    {% include "components/input_drive.html" with base_id="traject" %}
+<div class="section">
+    {% include "components/button_collapse.html" with title="Drive in" base_id="traject-drive" %}
+    <div class="collapse" id="collapse-traject-drive">
+        <div class="section-body">
+            {% include "components/input_drive.html" with base_id="traject" %}
+        </div>
+    </div>
 </div>

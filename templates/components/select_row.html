@@ -1,10 +1,12 @@
-<div class="container-group" id="{{ base_id }}">
-    <label class="form-label me-1 text-left" style="width: 5em;" for="{{ base_id }}-input">Rows</label>
-    <div class="traject-group">
-        <button type="button" class="btn btn-outline-secondary" data-row-action="previous">{% include "icons/dash.html" %}</button>
-        <input type="text" class="form-control ms-2 me-2 text-center" style="width: 10em;" id="{{ base_id }}-input" placeholder="0 or 0,1,2,3 or 0-3" data-row-input>
-        <button type="button" class="btn btn-outline-secondary" data-row-action="next">{% include "icons/plus.html" %}</button>
+<div id="{{ base_id }}">
+    <label class="field-label d-block" for="{{ base_id }}-input">Rows</label>
+    <div class="d-flex flex-wrap gap-2">
+        <div class="input-group stepper">
+            <button type="button" class="btn btn-outline-secondary" data-row-action="previous" aria-label="Previous row">{% include "icons/dash.html" %}</button>
+            <input type="text" class="form-control" id="{{ base_id }}-input" placeholder="0 · 0,1,3 · 0-3" data-row-input>
+            <button type="button" class="btn btn-outline-secondary" data-row-action="next" aria-label="Next row">{% include "icons/plus.html" %}</button>
+        </div>
+        <button type="button" class="btn btn-outline-secondary" data-row-action="all">All</button>
+        <button type="button" class="btn btn-outline-secondary btn-icon" data-row-action="show" title="Show selected rows" aria-label="Show selected rows">{% include "icons/arrow-repeat.html" %}</button>
     </div>
-    <button type="button" class="btn btn-outline-secondary" data-row-action="all">All</button>
-    <button type="button" class="btn btn-outline-secondary" data-row-action="show">{% include "icons/arrow-repeat.html" %}</button>
 </div>

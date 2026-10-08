@@ -1,6 +1,8 @@
-<div class="w-100 d-flex flex-1 mb-2 ms-1 me-1" data-stepper>
-    <label class="form-label mb-1 me-1 text-left" for="{{ base_id }}" {% if not title %}hidden{% endif %}>{{ title }}</label>
-    <button type="button" class="btn btn-outline-secondary" data-step="-1">{% include "icons/dash.html" %}</button>
-    <input class="form-control text-center" type="number" step="{{ step }}" id="{{ base_id }}" value="{{ default }}" min="{{ min }}" max="{{ max }}">
-    <button type="button" class="btn btn-outline-secondary" data-step="1">{% include "icons/plus.html" %}</button>
+<div>
+    {% if title %}<label class="field-label d-block" for="{{ base_id }}">{{ title }}</label>{% endif %}
+    <div class="input-group stepper" data-stepper>
+        <button type="button" class="btn btn-outline-secondary" data-step="-1" aria-label="Decrease">{% include "icons/dash.html" %}</button>
+        <input class="form-control" type="number" step="{{ step }}" id="{{ base_id }}" value="{{ default }}" min="{{ min }}" max="{{ max }}" {% if not title %}aria-label="Number"{% endif %}>
+        <button type="button" class="btn btn-outline-secondary" data-step="1" aria-label="Increase">{% include "icons/plus.html" %}</button>
+    </div>
 </div>

@@ -1,50 +1,52 @@
-{% extends "system/base.html" %} {% block title %} Process {% endblock %}
+{% extends "system/base.html" %} {% block title %}Processes{% endblock %}
 {% block content %}
-<h2>Process</h2>
-<div class="table-responsive">
-<table class="table">
-  <thead>
-    <tr>
-      <th scope="col">#</th>
-      <th scope="col">Name</th>
-      <th scope="col">Start Time</th>
-      <th scope="col">Status</th>
-      <th scope="col">Actions</th>
-      <th scope="col" class="text-right">Edit</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for process in processes %}
-    <tr>
-      <th scope="row">{{ process.Idx }}</th>
-      <td>{{ process.Name }}</td>
-      <td>{{ process.StartTime }}</td>
-      <td>{{ process.Status }}</td>
-      <td>
-        <div class="btn-group button-group">
-          <form method="GET" action="{% url 'system:start_process' %}">
-            <button type="submit" class="btn btn-outline-success" name="name" value="{{ process.Name }}">
-              {% include "icons/play.html" %}
-            </button>
-          </form>
-          <form method="GET" action="{% url 'system:stop_process' %}">
-            <button type="submit" class="btn btn-outline-danger" name="name" value="{{ process.Name }}">
-              {% include "icons/stop.html" %}
-            </button>
-          </form>
+
+<div class="page-header">
+  <div>
+    <h1>Processes</h1>
+    <p class="page-subtitle">Core software of the robot.</p>
+  </div>
+</div>
+
+<div class="card">
+  <table class="table table-modern table-hover table-cards">
+    <thead>
+      <tr>
+        <th scope="col">#</th>
+        <th scope="col">Name</th>
+        <th scope="col">Started</th>
+        <th scope="col">Status</th>
+        <th scope="col" class="text-end">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for process in processes %}
+      <tr>
+        <td data-label="#" class="text-body-secondary">{{ process.Idx }}</td>
+        <td data-label="Name" class="fw-semibold">{{ process.Name }}</td>
+        <td data-label="Started" class="small">{{ process.StartTime|default:"–" }}</td>
+        <td data-label="Status">
+          <span class="status-badge {% if process.Status == 'Running' %}status-running{% else %}status-stopped{% endif %}">{{ process.Status }}</span>
         </td>
-        <td class="text-right">
-          <form method="GET" action="{% url 'system:edit_process' %}">
-            <button type="submit" class="btn btn-outline-primary" name="name" value="{{ process.Name }}">
-              {% include "icons/pen.html" %}
-            </button>
-          </form>
+        <td>
+          <div class="row-actions">
+            <form method="GET" action="{% url 'system:start_process' %}" data-busy>
+              <button type="submit" class="btn btn-ghost text-success btn-icon" name="name" value="{{ process.Name }}" title="Start" aria-label="Start {{ process.Name }}">{% include "icons/play.html" %}</button>
+            </form>
+            <form method="GET" action="{% url 'system:stop_process' %}" data-busy>
+              <button type="submit" class="btn btn-ghost text-danger btn-icon" name="name" value="{{ process.Name }}" title="Stop" aria-label="Stop {{ process.Name }}">{% include "icons/stop.html" %}</button>
+            </form>
+            <form method="GET" action="{% url 'system:edit_process' %}" data-busy>
+              <button type="submit" class="btn btn-ghost btn-icon" name="name" value="{{ process.Name }}" title="View" aria-label="View {{ process.Name }}">{% include "icons/pen.html" %}</button>
+            </form>
           </div>
         </td>
-    </tr>
-  {% endfor %}
-
-  </tbody>
-</table>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5" class="text-center text-body-secondary py-4">No processes configured.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
 </div>
+
 {% endblock %}

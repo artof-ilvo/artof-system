@@ -1,72 +1,89 @@
 {% extends "app/base.html" %}
 {% load static %}
-{% block title %}Edit Field{% endblock %}
+{% block title %}Edit field{% endblock %}
+{% block main_class %}app-main pb-3{% endblock %}
 {% block content %}
 
-<div class="container-fluid d-flex" id="edit-field">
-    <div class="container" style="width: 100%; max-width: 40rem; margin:0;">
-        <!-- Field Name -->
-        {% include "components/button_collapse.html" with title="Name" base_id="field-name" %}
-        <form class="collapse form-inline mt-2" id="collapse-field-name" method="POST" action="{% url 'core:field_edit_name' %}">
-            {% csrf_token %}
-            <div class="w-100 d-flex">
-                <input type="hidden" name="original" value="{{ field_name }}">
-                <input class="form-control me-1 mb-2" type="text" id="input-field-name" name="new" pattern="[0-9a-zA-Z_]+" required value="{{ field_name }}">
-                <button id="check-field-name" type="submit" class="btn btn-outline-success ms-1 mb-2">{% include "icons/check2.html" %}</button>
+<div class="split-layout" id="edit-field">
+    <div class="card sidebar-card">
+        <div class="card-header d-flex align-items-center justify-content-between gap-2">
+            <div>
+                <h1 class="h5 m-0">Edit field</h1>
+                <div class="small text-body-secondary">{{ field_name }}</div>
             </div>
-        </form> 
-
-        <!-- Traject -->
-        {% include "components/button_collapse.html" with title="Traject" base_id="traject" %}
-        <form class="collapse form-inline mt-2" id="collapse-traject" method="POST" action="{% url 'core:field_edit_traject' %}">
-            {% csrf_token %}
-            {% include "components/container_field_edit.html" with base_id="traject" %}
-        </form> 
-
-        <!-- Geofence -->
-        {% include "components/button_collapse.html" with title="Geofence" base_id="geofence" %}
-        <form class="collapse form-inline mt-2" id="collapse-geofence" method="POST" action="{% url 'core:field_edit_geofence' %}">
-            {% csrf_token %}
-            {% include "components/container_field_edit.html" with base_id="geofence" %}
-        </form> 
-
-        <!-- Tasks -->
-        <div id="tasks-container">
-        {% for task in task_geometries %}
-            {% include "components/container_task_edit.html" with task=task implement_choices=implement_choices type_choices=type_choices hitch_choices=hitch_choices %}
-        {% endfor %}
         </div>
 
-        <div class="row mb-2">
-            <div class="d-flex justify-content-end">
-                <form method="GET" action="{% url 'core:delete_new_field' %}" id="cancel-field">
-                    <button class="btn btn-outline-danger ms-1 mt-2 me-1">Cancel</button>
-                </form>
-                <form method="GET" action="{% url 'core:field_edit_task_add' %}" data-field-name-form>
-                    <input type="hidden" name="field_name" value="{{ field_name }}">
-                    <button class="btn btn-outline-primary ms-1 mt-2 me-1" type="submit">Add Task</button>
-                </form>
-                <form method="GET" action="{% url 'core:field' %}">
-                    <button class="btn btn-outline-success ms-1 mt-2">Done</button>
+        <div class="card-body">
+            <!-- Field name -->
+            <div class="section mt-0">
+                {% include "components/button_collapse.html" with title="Name" base_id="field-name" %}
+                <form class="collapse" id="collapse-field-name" method="POST" action="{% url 'core:field_edit_name' %}">
+                    {% csrf_token %}
+                    <div class="section-body">
+                        <input type="hidden" name="original" value="{{ field_name }}">
+                        <label class="field-label d-block" for="input-field-name">Letters, digits and underscores</label>
+                        <div class="input-group">
+                            <input class="form-control" type="text" id="input-field-name" name="new" pattern="[0-9a-zA-Z_]+" required value="{{ field_name }}">
+                            <button id="check-field-name" type="submit" class="btn btn-primary">{% include "icons/check2.html" %} Save</button>
+                        </div>
+                    </div>
                 </form>
             </div>
-        </div>  
+
+            <!-- Traject -->
+            <div class="section">
+                {% include "components/button_collapse.html" with title="Traject" base_id="traject" %}
+                <form class="collapse" id="collapse-traject" method="POST" action="{% url 'core:field_edit_traject' %}">
+                    {% csrf_token %}
+                    <div class="section-body">
+                        {% include "components/container_field_edit.html" with base_id="traject" %}
+                    </div>
+                </form>
+            </div>
+
+            <!-- Geofence -->
+            <div class="section">
+                {% include "components/button_collapse.html" with title="Geofence" base_id="geofence" %}
+                <form class="collapse" id="collapse-geofence" method="POST" action="{% url 'core:field_edit_geofence' %}">
+                    {% csrf_token %}
+                    <div class="section-body">
+                        {% include "components/container_field_edit.html" with base_id="geofence" %}
+                    </div>
+                </form>
+            </div>
+
+            <!-- Tasks -->
+            <div class="d-flex align-items-center justify-content-between mt-4 mb-1">
+                <h2 class="field-label m-0 text-uppercase">Tasks</h2>
+                <form method="GET" action="{% url 'core:field_edit_task_add' %}" class="m-0" data-field-name-form data-busy>
+                    <input type="hidden" name="field_name" value="{{ field_name }}">
+                    <button class="btn btn-sm btn-outline-primary" type="submit">{% include "icons/plus.html" %} Add task</button>
+                </form>
+            </div>
+            <div id="tasks-container">
+            {% for task in task_geometries %}
+                {% include "components/container_task_edit.html" with task=task implement_choices=implement_choices type_choices=type_choices hitch_choices=hitch_choices %}
+            {% empty %}
+                <p class="mode-info">No tasks yet.</p>
+            {% endfor %}
+            </div>
+        </div>
+
+        <div class="card-footer">
+            <form method="GET" action="{% url 'core:delete_new_field' %}" id="cancel-field"
+                  {% if field_name == "New" %}data-confirm="Discard this new field?" data-confirm-label="Discard"{% endif %}>
+                <button class="btn btn-light">Cancel</button>
+            </form>
+            <form method="GET" action="{% url 'core:field' %}">
+                <button class="btn btn-primary">{% include "icons/check2.html" %} Done</button>
+            </form>
+        </div>
     </div>
 
-    <div id="map-container" style="width: 100%; min-width: 20rem; flex: 1; max-width: 100%; position: relative;"></div>
+    <div class="card map-card">
+        <div id="map-container" class="map"></div>
+    </div>
 </div>
-
-<style>
-    #edit-field {
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-    @media screen and (min-width: 1008px) {
-        #edit-field {
-            justify-content: flex-start;
-        }
-    }
-</style>
 
 {{ field_data|json_script:"field-data" }}
 <script type="module" src="{% static 'js/pages/field-edit.js' %}"></script>

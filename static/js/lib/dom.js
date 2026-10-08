@@ -48,6 +48,24 @@ export function bindTableSearch(input, table) {
     });
 }
 
+/** Marks a button as busy (disabled, with a spinner) until `promise` settles; returns the promise. */
+export async function withBusy(button, promise) {
+    const wasDisabled = button.disabled;
+    const spinner = document.createElement('span');
+    spinner.className = 'spinner-border spinner-border-sm';
+    spinner.setAttribute('aria-hidden', 'true');
+    button.prepend(spinner);
+    button.classList.add('is-busy');
+    button.disabled = true;
+    try {
+        return await promise;
+    } finally {
+        spinner.remove();
+        button.classList.remove('is-busy');
+        button.disabled = wasDisabled;
+    }
+}
+
 /** Keeps `element` sized so that it fills the window below the elements above it. */
 export function fillWindowHeight(element, bottomMarginPx = 30) {
     const resize = () => {

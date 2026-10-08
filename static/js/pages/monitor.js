@@ -1,4 +1,5 @@
-import { bindTableSearch, byId } from '../lib/dom.js';
+import { showError, showToast } from '../components/toast-stack.js';
+import { bindTableSearch, byId, withBusy } from '../lib/dom.js';
 import { postJSON } from '../lib/http.js';
 import { LiveSocket } from '../lib/live-socket.js';
 
@@ -18,7 +19,8 @@ class VariableRow {
         this.input = row.querySelector('[data-edit]');
         this.editUrl = editUrl;
 
-        row.querySelector('[data-upload]').addEventListener('click', () => this.write());
+        const button = row.querySelector('[data-upload]');
+        button.addEventListener('click', () => withBusy(button, this.write()));
     }
 
     show(value) {
@@ -32,8 +34,9 @@ class VariableRow {
         if (value === '') return;
         try {
             await postJSON(this.editUrl, { name: this.name, value });
+            showToast(`${this.name} = ${value}`);
         } catch (error) {
-            console.error(error);
+            showError(`Writing ${this.name}`, error);
         }
     }
 }

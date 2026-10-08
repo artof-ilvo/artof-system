@@ -67,7 +67,7 @@ class MapPage {
         this.initDriving();
         this.initEditor();
 
-        for (const element of [this.mapContainer, this.editContainer]) fillWindowHeight(element);
+        fillWindowHeight(byId('map-shell'), 0);
         this.map.invalidateSize();
     }
 
@@ -169,7 +169,15 @@ class MapPage {
 
         makeCollapsesExclusive(this.editContainer);
 
-        new ToggleButton(byId('edit-field-button'), null, (active) => this.showEditor(active));
+        this.editSheet = bootstrap.Offcanvas.getOrCreateInstance(this.editContainer);
+        this.editToggle = new ToggleButton(byId('edit-field-button'), null, (active) => this.showEditor(active));
+        // Closing the sheet (close button or Escape) ends editing too.
+        this.editContainer.addEventListener('hide.bs.offcanvas', () => byId('map-shell').classList.remove('is-editing'));
+        this.editContainer.addEventListener('hidden.bs.offcanvas', () => {
+            this.editToggle.set(false);
+            this.shapeSelect.value = '';
+            this.selectShape('');
+        });
 
         this.shapeSelect.addEventListener('change', () => this.selectShape(this.shapeSelect.value));
 
@@ -184,13 +192,18 @@ class MapPage {
     }
 
     showEditor(visible) {
-        this.mapContainer.style.width = visible ? '0%' : '100%';
-        show(this.editContainer, visible);
         if (!visible) {
-            this.shapeSelect.value = '';
-            this.selectShape('');
+            this.editSheet.hide();
+            return;
         }
-        this.map.invalidateSize();
+        // Side sheet below the header on wide screens, bottom sheet on phones.
+        const isPhone = window.matchMedia('(max-width: 767.98px)').matches;
+        this.editContainer.classList.toggle('offcanvas-end', !isPhone);
+        this.editContainer.classList.toggle('offcanvas-bottom', isPhone);
+        const headerBottom = byId('app-header').getBoundingClientRect().bottom;
+        this.editContainer.style.setProperty('--sheet-top', `${Math.max(headerBottom, 0)}px`);
+        byId('map-shell').classList.toggle('is-editing', !isPhone);
+        this.editSheet.show();
     }
 
     selectShape(name) {

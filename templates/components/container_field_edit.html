@@ -1,23 +1,18 @@
 {% load filters %}
 
-<div data-shape-editor="{{ base_id }}">
-    <div class="w-100 d-flex">
-        {% include "components/radio_multiple.html" with label="Input" options="original,file,draw,drive"|split default="original" base_id=base_id %}
-        <button type="button" class="btn btn-outline-success ms-auto mb-2" data-shape-submit>{% include "icons/check2.html" %}</button>
-    </div>
+<div class="stack" data-shape-editor="{{ base_id }}">
+    {% include "components/radio_multiple.html" with label="Source" options="original,file,draw,drive"|split default="original" base_id=base_id %}
 
-    <div data-mode-info="original">
-        <label>Keep the shape file from the system. Press check.</label>
-    </div>
+    <p class="mode-info m-0" data-mode-info="original">Keep the shape stored on the robot.</p>
     <div data-mode-info="file" style="display: none;">
-        <label class="mb-1" for="file-input-{{ base_id }}">Input the shape files (.shp, .shx, .dbf, .prj, .cpg) and press check when ready.</label>
+        <label class="field-label d-block" for="file-input-{{ base_id }}">Shape files (.shp, .shx, .dbf, .prj, .cpg)</label>
         <input type="file" class="form-control" multiple accept=".shp, .shx, .dbf, .prj, .cpg" id="file-input-{{ base_id }}"
                data-shapefile-url="{% url 'core:field_edit_shapefile' %}">
     </div>
-    <div data-mode-info="draw" style="display: none;">
-        <label>Draw on the map and press check when ready.</label>
-    </div>
-    <div data-mode-info="drive" style="display: none;">
-        <label>You can drive in later on the map screen. Press check.</label>
+    <p class="mode-info m-0" data-mode-info="draw" style="display: none;">Draw on the map with the tools in its top-left corner.</p>
+    <p class="mode-info m-0" data-mode-info="drive" style="display: none;">You can drive it in later on the map screen.</p>
+
+    <div class="d-flex justify-content-end">
+        <button type="button" class="btn btn-primary" data-shape-submit>{% include "icons/check2.html" %} Save</button>
     </div>
 </div>

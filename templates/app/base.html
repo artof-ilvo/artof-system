@@ -2,20 +2,9 @@
 <html lang="en">
   <head>
     {% load static %}
+    {% include "components/head_assets.html" %}
+    <title>{% block title %}ARTOF{% endblock %} · {{ robot_name }}</title>
 
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="csrf-token" content="{{ csrf_token }}" />
-    <title>{% block title %}ARTOF{% endblock %}</title>
-
-    <!-- Favicon and Apple Touch Icon -->
-    <link rel="apple-touch-icon" href="https://ilvo.vlaanderen.be/assets/dist/img/favicons/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="https://ilvo.vlaanderen.be/assets/dist/img/favicons/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="https://ilvo.vlaanderen.be/assets/dist/img/favicons/favicon-16x16.png">
-
-    <!-- Bootstrap -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-    <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <!-- Leaflet map -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
@@ -33,75 +22,76 @@
     <script type="module" src="{% static 'js/pages/app-base.js' %}"></script>
   </head>
   <body>
-    <nav class="navbar navbar-expand-lg bg-body-tertiary px-3" id="nav-bar">
-      <a class="navbar-brand" href="#">{{ robot_name }}</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button>
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav">
-          <li class="nav-item">
-            <a class="nav-link" href="{% url 'core:field' %}">Field</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{% url 'core:map' %}">Map</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{% url 'core:settings' %}">Settings</a>
-          </li>
-        </ul>
-        <div class="my-2 my-lg-0 ms-auto">
-          <a class="nav-link" href="{% url 'system:settings' %}">Admin</a>
+    {% with page=request.resolver_match.url_name %}
+    <header class="app-header app-header-sticky" id="app-header">
+      <nav class="navbar navbar-expand-md app-navbar">
+        <div class="container-fluid px-3">
+          <a class="navbar-brand" href="{% url 'core:field' %}">
+            <span class="brand-mark">{% include "icons/robot.html" %}</span>
+            {{ robot_name }}
+          </a>
+          <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button>
+          <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav">
+              <li class="nav-item">
+                <a class="nav-link {% if page == 'field' or page == 'field_edit' %}active{% endif %}" href="{% url 'core:field' %}">{% include "icons/list-ul.html" %} Fields</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if page == 'map' %}active{% endif %}" href="{% url 'core:map' %}">{% include "icons/map.html" %} Map</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if page == 'settings' %}active{% endif %}" href="{% url 'core:settings' %}">{% include "icons/sliders.html" %} Settings</a>
+              </li>
+            </ul>
+            <ul class="navbar-nav ms-auto">
+              <li class="nav-item">
+                <a class="nav-link" href="{% url 'system:settings' %}">{% include "icons/gear.html" %} Admin</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Status bar -->
+      <div class="container-fluid px-3">
+        <div class="status-strip" id="status-bar">
+          <div class="xte" title="Cross-track error">
+            <div class="xte-gauge" id="error-gauge" role="img" aria-label="Cross-track error">
+              <div class="xte-fill negative" id="error-bar-negative"></div>
+              <div class="xte-fill positive" id="error-bar-positive"></div>
+            </div>
+            <span class="chip xte-value" id="error-label">0.00 m</span>
+          </div>
+
+          <form id="navigation-state-form" method="POST" action="{% url 'core:navigation_state' %}" class="m-0">
+            {% csrf_token %}
+            {% load filters %}
+            {% include "components/radio_multiple.html" with label="State" options=navigation_state.states|split default=navigation_state.current_state base_id="state" %}
+          </form>
+
+          <div class="status-chips">
+            <span class="chip chip-danger" id="gps-chip" title="GPS">
+              {% include "icons/geo-alt.html" %}
+              <span id="gps-label">No Fix</span>
+            </span>
+            <span class="chip" title="Battery">
+              {% include "icons/battery-full.html" %}
+              <span id="battery-label">100%</span>
+            </span>
+            <span class="chip" title="Heartbeat">
+              <span class="heartbeat" id="heart-label"></span>
+              Live
+            </span>
+          </div>
         </div>
       </div>
-    </nav>
+    </header>
+    {% endwith %}
 
-    <!-- Status Bar -->
-    <div class="container-fluid d-flex pl-3 pr-3 pt-1 pb-1 align-items-center flex-wrap" id="status-bar">
-      <!-- Cross-track error -->
-      <div class="d-flex flex-grow-1">
-        <div class="progress mt-1" style="height: 20px; width: 30vw; transform: rotate(180deg);">
-          <div id="error-bar-negative" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuemin="0" aria-valuemax="100"></div>
-        </div>
-        <span class="badge text-bg-primary m-1" id="error-label">0.00 m</span>
-        <div class="progress mt-1" style="height: 20px; width: 30vw;">
-          <div id="error-bar-positive" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuemin="0" aria-valuemax="100"></div>
-        </div>
-      </div>
+    <main class="{% block main_class %}app-main{% endblock %}">
+      <div class="container-fluid {% block container_class %}px-3{% endblock %}">{% block content %}{% endblock %}</div>
+    </main>
 
-      <!-- Navigation state -->
-      <form class="form-inline flex-grow-1 mt-2 sm-0" id="navigation-state-form" method="POST" action="{% url 'core:navigation_state' %}">
-        {% csrf_token %}
-        {% load filters %}
-        {% include "components/radio_multiple.html" with label="State" options=navigation_state.states|split default=navigation_state.current_state base_id="state" %}
-      </form>
-
-      <!-- GPS, battery and heartbeat -->
-      <div class="d-flex flex-grow-1">
-        <span class="badge text-bg-primary m-1 d-flex align-items-center">
-          {% include "icons/compass.html" %}
-          <div id="gps-label" class="ms-1">No Fix</div>
-        </span>
-        <span class="badge text-bg-primary m-1 text-center d-flex align-items-center">
-          {% include "icons/battery-full.html" %}
-          <div id="battery-label" class="ms-1">100%</div>
-        </span>
-        <span class="badge bg-primary m-1 text-center d-flex align-items-center" id="heart-label">
-          {% include "icons/heart-fill.html" %}
-        </span>
-      </div>
-    </div>
-
-    <div class="container-fluid pr-3 pl-3">{% block content %} {% endblock %}</div>
-
-    <div class="d-flex justify-content-center toast-container-fixed">
-      <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" id="robot-toast" data-bs-autohide="false" data-acknowledge-url="{% url 'core:notification_acknowledge' %}">
-        <div class="toast-header">
-          <img src="https://ilvo.vlaanderen.be/assets/dist/img/favicons/favicon-32x32.png" class="rounded me-2" alt="ILVO">
-          <strong class="me-auto">{{ robot_name }}</strong>
-          <small class="text-muted">Just now</small>
-          <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-        </div>
-        <div class="toast-body"></div>
-      </div>
-    </div>
+    {% include "components/overlays.html" with autohide=False %}
   </body>
 </html>

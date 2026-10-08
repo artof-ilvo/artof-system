@@ -1,81 +1,77 @@
 {% extends "app/base.html" %}
 {% load static %}
-{% block title %}Field{% endblock %}
+{% block title %}Fields{% endblock %}
 {% block content %}
 
-<h2 class="mb-2">Field</h2>
-<div class="container-fluid d-flex p-0 flex-wrap">
-    <h3>Selected field: {{ current_field }}</h3>
-    <div class="d-flex flex-grow-1 justify-content-end">
-        <div class="form-inline">
-            <input class="form-control me-2 sm-2" type="search" placeholder="Search" aria-label="Search" id="search">
+<div class="page-header">
+    <div>
+        <h1>Fields</h1>
+        <p class="page-subtitle">Selected field: <strong class="text-body">{{ current_field }}</strong></p>
+    </div>
+    <div class="page-actions">
+        <div class="search-input">
+            {% include "icons/search.html" %}
+            <input class="form-control" type="search" placeholder="Search fields" aria-label="Search fields" id="search">
         </div>
-        <form method="GET" action="{% url 'core:field_edit' %}">
+        <form method="GET" action="{% url 'core:field_edit' %}" class="m-0" data-busy>
             <input type="hidden" name="name" value="New">
-            <button type="submit" class="btn btn-outline-primary ms-1">New</button>
+            <button type="submit" class="btn btn-primary">{% include "icons/plus.html" %} New field</button>
         </form>
     </div>
 </div>
 
-<div class="table-responsive">
-<table class="table w-100" id="field-table">
-    <thead>
-      <tr>
-        <th scope="col">Name</th>
-        <th scope="col">Edit</th>
-        <th scope="col" class="text-right">Delete</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for fieldName in fields %}
-    <tr>
-        <td>
-            <div class="btn-group button-group d-flex align-items-center">
-                <form method="GET" action="{% url 'core:field_select' %}">
-                    <button type="submit" class="btn btn-success" name="name" value="{{ fieldName }}" {% if current_field == fieldName %}disabled{% endif %}>
-                        {% include "icons/check2.html" %}
-                    </button>
-                </form>
-                {% if current_field == fieldName %}
-                    <span class="fw-bold fs-4 ps-2">{{ fieldName }}</span>
-                {% else %}
-                    <a class="link-body-emphasis text-decoration-none fs-4 ps-2" href="{% url 'core:field_select' %}?name={{ fieldName|urlencode }}">{{ fieldName }}</a>
-                {% endif %}
-            </div>
-        </td>
-        <td>
-            <div class="btn-group button-group">
-                <form method="GET" action="{% url 'core:field_duplicate' %}">
-                    <button type="submit" class="btn btn-secondary" name="name" value="{{ fieldName }}">
-                        {% include "icons/copy.html" %}
-                    </button>
-                </form>
-                <form method="GET" action="{% url 'core:field_edit' %}">
-                    <button type="submit" class="btn btn-primary" name="name" value="{{ fieldName }}">
-                        {% include "icons/pen.html" %}
-                    </button>
-                </form>
-            </div>
-        </td>
-        <td>
-            <div class="btn-group button-group">
-                <div class="ms-auto">
-                    <a class="btn btn-primary" href="{% url 'core:field_download' %}?name={{ fieldName|urlencode }}" download="{{ fieldName }}.zip">
-                        {% include "icons/download.html" %}
-                    </a>
-                </div>
-                <form method="GET" action="{% url 'core:field_delete' %}">
-                    <button type="submit" class="btn btn-danger" name="name" value="{{ fieldName }}" {% if current_field == fieldName %}disabled{% endif %}>
-                        {% include "icons/trash.html" %}
-                    </button>
-                </form>
-            </div>
-        </td>
-    </tr>
-    {% endfor %}
-  
-    </tbody>
-</table>
+<div class="card">
+    <table class="table table-modern table-hover table-cards" id="field-table">
+        <thead>
+            <tr>
+                <th scope="col">Name</th>
+                <th scope="col" class="text-end">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for fieldName in fields %}
+            <tr>
+                <td>
+                    {% if current_field == fieldName %}
+                        <span class="fw-semibold">{{ fieldName }}</span>
+                        <span class="status-badge status-running ms-2">Selected</span>
+                    {% else %}
+                        <a class="fw-semibold link-body-emphasis text-decoration-none" href="{% url 'core:field_select' %}?name={{ fieldName|urlencode }}" title="Select this field">{{ fieldName }}</a>
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="row-actions">
+                        <form method="GET" action="{% url 'core:field_select' %}" data-busy>
+                            <button type="submit" class="btn btn-ghost text-success btn-icon" name="name" value="{{ fieldName }}" title="Select" aria-label="Select {{ fieldName }}" {% if current_field == fieldName %}disabled{% endif %}>
+                                {% include "icons/check2.html" %}
+                            </button>
+                        </form>
+                        <form method="GET" action="{% url 'core:field_duplicate' %}" data-busy>
+                            <button type="submit" class="btn btn-ghost btn-icon" name="name" value="{{ fieldName }}" title="Duplicate" aria-label="Duplicate {{ fieldName }}">
+                                {% include "icons/copy.html" %}
+                            </button>
+                        </form>
+                        <form method="GET" action="{% url 'core:field_edit' %}" data-busy>
+                            <button type="submit" class="btn btn-ghost btn-icon" name="name" value="{{ fieldName }}" title="Edit" aria-label="Edit {{ fieldName }}">
+                                {% include "icons/pen.html" %}
+                            </button>
+                        </form>
+                        <a class="btn btn-ghost btn-icon" href="{% url 'core:field_download' %}?name={{ fieldName|urlencode }}" download="{{ fieldName }}.zip" title="Download" aria-label="Download {{ fieldName }}">
+                            {% include "icons/download.html" %}
+                        </a>
+                        <form method="GET" action="{% url 'core:field_delete' %}" data-busy data-confirm="Delete field “{{ fieldName }}”? This cannot be undone.">
+                            <button type="submit" class="btn btn-ghost text-danger btn-icon" name="name" value="{{ fieldName }}" title="{% if current_field == fieldName %}The selected field cannot be deleted{% else %}Delete{% endif %}" aria-label="Delete {{ fieldName }}" {% if current_field == fieldName %}disabled{% endif %}>
+                                {% include "icons/trash.html" %}
+                            </button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="2" class="text-center text-body-secondary py-4">No fields yet.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
 </div>
 
 <script type="module">

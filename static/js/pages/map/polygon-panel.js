@@ -1,3 +1,4 @@
+import { showError } from '../../components/toast-stack.js';
 import { byId, hideCollapse } from '../../lib/dom.js';
 import { postJSON } from '../../lib/http.js';
 import { drawPreviewPolygon } from '../../map/field-layers.js';
@@ -38,7 +39,7 @@ export class PolygonPanel {
             drawPreviewPolygon(this.overlayGroup, result.latlng);
             this.edit.setPreview(result.rings);
         } catch (error) {
-            console.error(error);
+            showError('The buffer operation', error);
         }
     }
 }

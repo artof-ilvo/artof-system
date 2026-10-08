@@ -46,6 +46,8 @@ Server-rendered Django templates + Bootstrap 5 + Leaflet (plugins: rotate-map, p
   - Endpoint URLs come from the element that uses them (`form.action`, `data-*-url` attributes).
   - Reusable components in `templates/components/` are wired up through data attributes handled by `static/js/components/form-controls.js` (`data-stepper` + `data-step`, `data-autosubmit`, range `data-label`).
   - POSTs go through `static/js/lib/http.js`, which takes the CSRF token from `<meta name="csrf-token">`; websockets use `LiveSocket` (`static/js/lib/live-socket.js`).
+  - Feedback: `showToast()` / `showError()` (`static/js/components/toast-stack.js`) for request results, `withBusy(button, promise)` (`lib/dom.js`) for spinners on fetch actions, `data-busy` on forms that navigate away, `data-confirm="Question?"` (+ optional `data-confirm-label`) on destructive forms (`components/confirm-dialog.js`). `NotificationToast` is only for robot notifications, since closing it acknowledges them on the server.
+- Styling: light theme only. All colours, radii and shadows are tokens in `:root` of `static/css/app.css` (brand colour `--brand`), which also overrides Bootstrap's CSS variables; prefer those tokens and the existing classes (`page-header`, `card` + `table-modern table-cards` with `data-label` cells for phone layouts, `btn-ghost btn-icon` row actions, `section-toggle` collapsible sections, `segmented` radio groups, `floating-panel` map controls) over new one-off styles. Shared `<head>` assets and the toast/confirm overlays live in `templates/components/head_assets.html` and `overlays.html`.
 - Map code shared by the map and field-edit pages is in `static/js/map/` (`createMap` persists the view in sessionStorage, `RobotLayer` draws the `/ws/robot/` data, `field-layers.js` draws traject/geofence/tasks).
 - Map page editing (`static/js/pages/map/`): `ShapeEdit` holds `server` / `accepted` / `preview` geometry of the selected shape. Traject and polygon operations are computed server-side (`core:map_edit_traject_operation`, `core:map_edit_polygon_operation`) and shown as a dashed preview; check buttons accept, the upload form posts `accepted`. Traject `reverse` returns nested paths, all other operations a single path that the client wraps in `[...]`.
 - Coordinates: geometries carry both projected coordinates (`xy`, `paths`, `rings`, `points` in the field's UTM CRS) and `latlng` (WGS84) for Leaflet.
@@ -53,5 +55,6 @@ Server-rendered Django templates + Bootstrap 5 + Leaflet (plugins: rotate-map, p
 ## Gotchas
 
 - `app_core/views.py`, `app_core/urls.py` and `ilvo/consumers.py` use CRLF line endings; preserve them when editing.
+- With `DEBUG=0` Django caches templates: restart the server after editing templates before checking the result.
 - `.gitignore` patterns are root-anchored for `/lib/`; a bare `lib/` would ignore `static/js/lib/`.
 - Several endpoints write to the live robot (navigation state, simulation, hitch/navigation settings, monitor edits, map uploads). Be careful when exercising the UI against a real robot's Redis.

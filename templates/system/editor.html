@@ -3,82 +3,24 @@
 {% block title %}Editor{% endblock %}
 {% block content %}
 
-<form method="POST" action="edit" id="editor-form">
-    {% csrf_token %}
-    <div class="editor-button-container">
-        <button type="button" class="btn btn-light" id="back-button" style="float: left" aria-label="Back">
-            {% include "icons/arrow-left-short.html" %}
-        </button>
-        <input type="text" name="name" value="{{ Name }}" id="editor-job-name" aria-label="Name">
-    </div>
-    <div id="editor-container">
-        <div id="line-numbers-container">
-            <div id="line-numbers"></div>
-        </div>
-        <textarea name="data" id="json-editor" spellcheck="false" aria-label="JSON">{{ Json }}</textarea>
-    </div>
-    <button id="submitBtn" type="submit" class="btn btn-success" style="float: right; margin-right: 10px;">
-        {% include "icons/box-arrow-in-up.html" %} Submit
+<form method="POST" action="edit" id="editor-form" class="card" data-busy>
+  {% csrf_token %}
+  <div class="card-header d-flex flex-wrap align-items-center gap-2">
+    <button type="button" class="btn btn-ghost btn-icon" id="back-button" title="Back" aria-label="Back">
+      {% include "icons/arrow-left-short.html" %}
     </button>
-    <button id="formatBtn" type="button" class="btn btn-primary" style="float: right; margin-right: 10px;">
-        {% include "icons/json.html" %} Format
-    </button>
+    <input type="text" name="name" value="{{ Name }}" id="editor-job-name" class="file-name-input flex-grow-1" aria-label="Name">
+    <button id="formatBtn" type="button" class="btn btn-outline-secondary">{% include "icons/json.html" %} Format</button>
+    <button id="submitBtn" type="submit" class="btn btn-primary">{% include "icons/box-arrow-in-up.html" %} Save</button>
+  </div>
+  <div class="code-editor">
+    <div class="code-gutter" id="line-numbers-container">
+      <div id="line-numbers"></div>
+    </div>
+    <textarea name="data" id="json-editor" spellcheck="false" aria-label="JSON">{{ Json }}</textarea>
+  </div>
 </form>
 
 <script type="module" src="{% static 'js/pages/editor.js' %}"></script>
-
-<style>
-
-#editor-container {
-    display: flex;
-    margin: 10px;
-    height: calc(100vh - 12em);
-}
-
-#line-numbers-container {
-    width: 3em;
-    height: 100%;
-    overflow-y: hidden;
-    padding: 0 10px; /* Padding for top/bottom and left/right */
-    text-align: right;
-    background-color: var(--color-light-shade);
-    border-radius: 5px 0 0 5px; /* top-left | top-right | bottom-right | bottom-left */
-}
-
-#line-numbers {
-    display: inline-block;
-    white-space: pre;
-    font-family: 'Courier New', monospace;
-}
-
-#json-editor {
-    width: 100%;
-    height: 100%;
-    font-family: 'Courier New', monospace;
-    resize: none;
-    background-color: var(--color-light);
-    border: none;
-    border-radius: 0 5px 5px 0; /* top-left | top-right | bottom-right | bottom-left */
-}
-
-#json-editor:focus {
-    outline: none !important;
-}
-
-#editor-job-name {
-    padding-top: 5px;
-    margin-left: 10px;
-    border: none;
-}
-
-#editor-job-name:focus {
-    outline: none !important;
-}
-
-.editor-button-container {
-    width: 100%;
-}
-
-</style>
 
 {% endblock %}

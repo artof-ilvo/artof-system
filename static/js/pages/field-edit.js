@@ -1,5 +1,5 @@
-import { notify } from './app-base.js';
-import { byId, checkedValue, fillWindowHeight, hideCollapse, makeCollapsesExclusive, readJSON, show } from '../lib/dom.js';
+import { showError, showToast } from '../components/toast-stack.js';
+import { byId, checkedValue, fillWindowHeight, hideCollapse, makeCollapsesExclusive, readJSON, show, withBusy } from '../lib/dom.js';
 import { postForm } from '../lib/http.js';
 import { LiveSocket } from '../lib/live-socket.js';
 import { drawGeofence, drawTask, drawTraject } from '../map/field-layers.js';
@@ -8,10 +8,9 @@ import { RobotLayer } from '../map/robot-layer.js';
 
 const FIELD_ZOOM = 18;
 
-/** Colors a section button green once its changes are saved. */
-function markSaved(button, saved) {
-    button.classList.toggle('btn-outline-success', saved);
-    button.classList.toggle('btn-outline-secondary', !saved);
+/** Shows a check mark on a section's toggle once its changes are saved. */
+function markSaved(toggle, saved) {
+    toggle.classList.toggle('is-saved', saved);
 }
 
 /** Flattens the shapes drawn with Leaflet Draw to coordinates: one [[lat, lng], ...] per line or polygon, [lat, lng] per point. */
@@ -63,7 +62,8 @@ class ShapeSection {
         this.form = editor.closest('form');
         this.toggleButton = byId(`button-${this.name}`);
 
-        editor.querySelector('[data-shape-submit]').addEventListener('click', () => this.submit());
+        const submitButton = editor.querySelector('[data-shape-submit]');
+        submitButton.addEventListener('click', () => withBusy(submitButton, this.submit()));
         for (const radio of editor.querySelectorAll(`input[name="${CSS.escape(this.name)}"]`)) {
             radio.addEventListener('change', () => this.onModeChange());
         }
@@ -117,8 +117,7 @@ class ShapeSection {
             const response = await postForm(input.dataset.shapefileUrl, formData);
             this.page.updateShape(this.name, await response.json());
         } catch (error) {
-            console.error(error);
-            notify('The shape files could not be read.');
+            showError('Reading the shape files', error);
         }
     }
 
@@ -127,7 +126,7 @@ class ShapeSection {
         if (mode === 'draw') {
             const features = drawnCoordinates(this.page.drawnItems);
             if (features.length === 0) {
-                notify('Please draw a shape on the map. The number of drawn features is zero.');
+                showToast('Draw a shape on the map first.', 'warning');
                 return;
             }
             this.page.updateShape(this.name, { ...this.geometry, empty: false, latlng: features });
@@ -143,9 +142,10 @@ class ShapeSection {
             await postForm(this.form.action, formData);
             markSaved(this.toggleButton, true);
             hideCollapse(this.form);
+            showToast(`${this.toggleButton.textContent.trim()} saved.`);
         } catch (error) {
-            console.error(error);
             markSaved(this.toggleButton, false);
+            showError('Saving', error);
         }
     }
 }
@@ -174,7 +174,7 @@ class FieldEditPage {
         makeCollapsesExclusive(this.root);
 
         new LiveSocket('/ws/robot/', (data) => this.onRobotData(data));
-        fillWindowHeight(this.mapContainer);
+        fillWindowHeight(this.root, 16);
         this.map.invalidateSize();
     }
 
@@ -264,14 +264,15 @@ class FieldEditPage {
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
             try {
-                await postForm(form.action, new FormData(form));
+                await withBusy(byId('check-field-name'), postForm(form.action, new FormData(form)));
                 this.field.name = input.value;
                 form.querySelector('input[name="original"]').value = input.value;
                 markSaved(button, true);
                 hideCollapse(form);
+                showToast(`Renamed to ${input.value}.`);
             } catch (error) {
-                console.error(error);
                 markSaved(button, false);
+                showError('Renaming the field', error);
             }
         });
     }

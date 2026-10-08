@@ -1,3 +1,4 @@
+import { showError } from '../../components/toast-stack.js';
 import { postJSON } from '../../lib/http.js';
 
 export const ALL_ROWS = -1;
@@ -72,7 +73,7 @@ export class RowSelector {
         try {
             ({ latlng: rowLatlngs } = await postJSON(this.rowsUrl, { data: this.getPaths() }));
         } catch (error) {
-            console.error(error);
+            showError('Loading the rows', error);
             return;
         }
 

@@ -1,7 +1,9 @@
-<div class="btn-group mb-2 radio-group" role="group">
-    <label class="btn btn-outline-secondary" type="button">{{ label }}</label>
-    {% for option in options %}
-        <input type="radio" class="btn-check" name="{{base_id}}" value="{{option}}" id="radio-{{base_id}}-{{option}}" {% if option == default %} checked {% endif %}>
-        <label class="btn btn-outline-primary" for="radio-{{base_id}}-{{option}}" type="button">{{option}}</label>
-    {% endfor %}
+<div class="segmented-field">
+    <span class="field-label m-0">{{ label }}</span>
+    <div class="segmented" role="group" aria-label="{{ label }}">
+        {% for option in options %}
+            <input type="radio" class="btn-check" name="{{ base_id }}" value="{{ option }}" id="radio-{{ base_id }}-{{ option }}" autocomplete="off" {% if option == default %}checked{% endif %}>
+            <label class="btn" for="radio-{{ base_id }}-{{ option }}">{{ option }}</label>
+        {% endfor %}
+    </div>
 </div>

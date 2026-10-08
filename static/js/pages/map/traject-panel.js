@@ -1,3 +1,4 @@
+import { showError } from '../../components/toast-stack.js';
 import { byId, checkedValue, hideCollapse } from '../../lib/dom.js';
 import { postJSON } from '../../lib/http.js';
 import { drawPreviewTraject } from '../../map/field-layers.js';
@@ -190,7 +191,7 @@ export class TrajectPanel {
             this.showPreview(result.latlng);
             return result.path;
         } catch (error) {
-            console.error(error);
+            showError('The traject operation', error);
             return null;
         }
     }
