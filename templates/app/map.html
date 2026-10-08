@@ -27,8 +27,9 @@
             </form>
             <form id="as-applied-record-form" method="POST" action="{% url 'core:map_as_applied_record' %}">
                 {% csrf_token %}
-                <input type="checkbox" class="btn-check" id="as-applied-record-check" name="record" value="on" autocomplete="off" {% if as_applied_recording %}checked{% endif %}>
-                <label class="btn btn-outline-secondary record-toggle" for="as-applied-record-check" title="Record the as-applied map" aria-label="Record the as-applied map">{% include "icons/record-fill.html" %}</label>
+                <input type="checkbox" class="btn-check" id="as-applied-record-check" name="record" value="on" autocomplete="off" {% if as_applied_recording %}checked{% endif %} {% if as_applied_auto %}disabled{% endif %}>
+                <label class="btn btn-outline-secondary record-toggle" for="as-applied-record-check" id="as-applied-record-label"
+                       title="Record the as-applied map" data-title-auto="Recording follows auto mode" aria-label="Record the as-applied map">{% include "icons/record-fill.html" %}</label>
             </form>
         </div>
 
@@ -48,7 +49,7 @@
          data-sessions-url="{% url 'core:map_as_applied_sessions' %}" data-map-url="{% url 'core:map_as_applied' %}">
         <div class="as-applied-header">
             <span class="panel-label">As-applied</span>
-            <span class="as-applied-live" id="as-applied-live" hidden>{% include "icons/record-fill.html" %} Rec</span>
+            <span class="as-applied-live" id="as-applied-live" hidden>{% include "icons/record-fill.html" %} Rec<span class="as-applied-auto" id="as-applied-auto" hidden> · auto</span></span>
         </div>
         <select class="form-select form-select-sm" id="as-applied-select" aria-label="As-applied map to show">
             <option value="latest">Latest</option>

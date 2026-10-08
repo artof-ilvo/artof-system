@@ -1,10 +1,10 @@
 from django.shortcuts import render, redirect
 from django.urls import reverse
-from django.http import HttpResponse, JsonResponse
+from django.http import FileResponse, HttpResponse, JsonResponse
 from artof_utils.robot import robot_manager
 from artof_utils.redis_instance import redis_server
 from artof_utils import as_applied
-from artof_utils.schemas.field import Fields, Field, get_current_field_name
+from artof_utils.schemas.field import Fields, Field, get_current_field_name, get_field_names
 from artof_utils.schemas.task import TaskInfo
 from artof_utils.helpers import traject
 from artof_utils.helpers import polygon
@@ -13,6 +13,7 @@ from artof_utils.helpers import shape as shp
 from artof_utils.schemas.settings import HitchName
 import artof_utils.paths as paths
 from .forms.multifileinput import FileFieldForm
+from .utils import applied as applied_layers
 from .utils.shapefiles import (ShapefileError, load_uploaded_gdf, prepare_upload, preserving_attributes,
                                set_task_attribute, sync_geom_type, task_attribute, task_geom_type, utm_crs,
                                xy_to_crs)
@@ -340,6 +341,7 @@ def map_context():
         'speed_factor': int(robot_manager.get_simulation_speed_factor())
     }
     map_context['as_applied_recording'] = as_applied.is_recording(redis_server)
+    map_context['as_applied_auto'] = as_applied.auto_mode_active(redis_server)
 
     return map_context
 
@@ -360,40 +362,40 @@ def map_simulation_position(request):
     robot_manager.set_position_latlon(data['lat'], data['lon'])
     return HttpResponse()
 
-def taskmap_addon_running():
-    addons = redis_server.get_json_value("system").get("ilvoAddons", [])
-    return any(addon.get("Name") == "taskmap" and addon.get("Running") for addon in addons)
+def as_applied_state():
+    """Recording flag, session being recorded, whether the task-map addon runs and whether auto mode drives the flag."""
+    return {
+        'recording': as_applied.is_recording(redis_server),
+        'auto_mode': as_applied.auto_mode_active(redis_server),
+        'active_session': (redis_server.r.get(as_applied.REDIS_SESSION) or b'').decode(),
+        'addon_running': as_applied.recorder_alive(redis_server),
+    }
 
 def map_as_applied_record(request):
+    # In auto mode the task-map addon keeps recording on; it is only toggled by hand outside auto mode
+    if as_applied.auto_mode_active(redis_server):
+        return JsonResponse({'message': 'Recording follows auto mode: it stops when the robot leaves auto mode.',
+                             **as_applied_state()}, status=409)
     as_applied.set_recording(redis_server, request.POST.get("record") == "on")
-    return JsonResponse({'recording': as_applied.is_recording(redis_server), 'addon_running': taskmap_addon_running()})
+    return JsonResponse(as_applied_state())
 
 def map_as_applied_sessions(request):
-    """Recorded sessions of the current field (newest first) and the files of the running recording."""
+    """Recorded sessions of the current field (newest first) and the recording state."""
     field_name = get_current_field_name()
-    try:
-        active_files = json.loads(redis_server.r.get(as_applied.REDIS_FILES) or '[]')
-    except ValueError:
-        active_files = []
-    return JsonResponse({
-        'field': field_name,
-        'sessions': as_applied.list_sessions(field_name),
-        'active_files': active_files,
-        'recording': as_applied.is_recording(redis_server),
-        'addon_running': taskmap_addon_running(),
-    })
+    return JsonResponse({'field': field_name, 'sessions': as_applied.list_sessions(field_name), **as_applied_state()})
 
 def map_as_applied(request):
-    """GeoJSON (WGS84) of an as-applied session; `skip` leaves out the features the client already has."""
-    file_name = request.GET.get('file', '')
+    """GeoJSON (WGS84) of the sections of a session; `skip` leaves out the features the client already has."""
+    session = request.GET.get('session', '')
     skip = max(int(request.GET.get('skip', 0) or 0), 0)
     try:
-        gdf = as_applied.read_session(get_current_field_name(), file_name, skip=skip)
+        gdf = as_applied.read_layer(get_current_field_name(), session, as_applied.SECTIONS, skip=skip)
     except ValueError as error:
         return JsonResponse({'message': str(error)}, status=400)
     except Exception:
-        return JsonResponse({'message': "As-applied map '%s' could not be read" % file_name}, status=404)
+        return JsonResponse({'message': "As-applied session '%s' could not be read" % session}, status=404)
     return HttpResponse(gdf.to_crs('EPSG:4326').to_json(drop_id=True), content_type='application/json')
+
 
 def map_edit_shape(request):
     shape = request.POST.get('shape')
@@ -463,3 +465,79 @@ def map_edit_traject_rows(request):
         traject_rows_latlng.append(shp.transform_crs(utm_crs, wgs84_crs, traject_row))
 
     return JsonResponse({'latlng': traject_rows_latlng})
+
+
+# As-applied sessions (Applied page)
+def applied_field_name(request):
+    """Field asked for in the request (GET `field`), or the robot's current field."""
+    field_name = request.GET.get('field') or get_current_field_name()
+    if field_name not in get_field_names():
+        raise applied_layers.AppliedError("Field '%s' does not exist" % field_name)
+    return field_name
+
+def applied_request(view):
+    """Answers AppliedError (bad field, session, layer, attribute or filter) as JSON {message} with status 400."""
+    def wrapper(request):
+        try:
+            return view(request, applied_field_name(request), request.GET.get('session', ''), request.GET.get('layer', ''))
+        except applied_layers.AppliedError as error:
+            return JsonResponse({'message': str(error)}, status=400)
+    return wrapper
+
+def applied(request):
+    try:
+        field_name = applied_field_name(request)
+    except applied_layers.AppliedError:
+        return redirect(reverse('core:applied'))
+    field = robot_manager.field if field_name == robot_manager.field.name else Field(field_name)
+    context = with_field_data(field.context)
+    context['applied_field'] = field_name
+    context['field_names'] = sorted(get_field_names())
+    context['sessions'] = [{'id': session,
+                            'start': as_applied.session_start(session).isoformat(),
+                            'layers': as_applied.session_layers(field_name, session)}
+                           for session in as_applied.list_sessions(field_name)]
+    context['active_session'] = as_applied_state()['active_session']
+    return render(request, "app/applied.html", context=create_context(context))
+
+@applied_request
+def applied_layer(request, field_name, session, layer):
+    """Attribute columns {name: kind} and feature count of a session layer."""
+    columns, count = applied_layers.layer_columns(field_name, session, layer)
+    return JsonResponse({'columns': columns, 'count': count})
+
+@applied_request
+def applied_attribute(request, field_name, session, layer):
+    """Range and distinct values of one attribute (GET `name`)."""
+    return JsonResponse(applied_layers.attribute_summary(field_name, session, layer, request.GET.get('name', '')))
+
+@applied_request
+def applied_features(request, field_name, session, layer):
+    """GeoJSON of the filtered features (GET `color`, `filters` as JSON); counts in X-Shown / X-Total headers."""
+    filters = applied_layers.parse_filters(request.GET.get('filters'))
+    geojson, shown, total = applied_layers.filtered_features(field_name, session, layer, request.GET.get('color', ''),
+                                                              filters)
+    response = HttpResponse(geojson, content_type='application/json')
+    response['X-Shown'], response['X-Total'] = shown, total
+    return response
+
+@applied_request
+def applied_feature(request, field_name, session, layer):
+    """All attributes of one feature (GET `fid`)."""
+    try:
+        fid = int(request.GET.get('fid', ''))
+    except ValueError:
+        raise applied_layers.AppliedError('Invalid feature id')
+    return JsonResponse(applied_layers.feature_properties(field_name, session, layer, fid))
+
+@applied_request
+def applied_download(request, field_name, session, layer):
+    """The layer's GeoPackage, to open in QGIS."""
+    try:
+        file_path = as_applied.layer_path(field_name, session, layer)
+    except ValueError as error:
+        raise applied_layers.AppliedError(str(error))
+    if not path.exists(file_path):
+        raise applied_layers.AppliedError("As-applied session '%s' has no %s layer" % (session, layer))
+    return FileResponse(open(file_path, 'rb'), as_attachment=True,
+                        filename='%s_%s_%s.gpkg' % (field_name, session, layer))

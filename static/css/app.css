@@ -31,6 +31,8 @@
     /* As-applied map: rate 0 (driven, nothing applied) and a sequential ramp from low to high rate. */
     --rate-none: #94a3b8;
     --rate-ramp: #ffffcc, #c2e699, #78c679, #31a354, #006837;
+    /* Attributes with a few distinct values (Applied page). */
+    --category-colors: #2563eb, #ea580c, #16a34a, #db2777, #7c3aed, #ca8a04, #0891b2, #dc2626;
 
     --shadow-sm: 0 1px 2px rgba(15, 23, 42, .06), 0 1px 3px rgba(15, 23, 42, .08);
     --shadow-md: 0 4px 12px rgba(15, 23, 42, .10), 0 2px 4px rgba(15, 23, 42, .06);
@@ -1044,6 +1046,114 @@ input[type="number"] {
     background: var(--danger-subtle);
     border-radius: var(--bs-border-radius);
     padding: .25rem .4rem;
+}
+
+/* Applied page: controls next to the map (stacked on phones). */
+.applied-layout {
+    display: grid;
+    grid-template-columns: 20rem minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+.applied-sidebar {
+    max-height: calc(100vh - 9rem);
+    overflow-y: auto;
+}
+
+.applied-map {
+    min-height: 24rem;
+}
+
+@media (max-width: 991.98px) {
+    .applied-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .applied-sidebar {
+        max-height: none;
+    }
+}
+
+.applied-legend:empty {
+    display: none;
+}
+
+.applied-legend {
+    display: flex;
+    flex-wrap: wrap;
+    flex-direction: column;
+    gap: .25rem;
+}
+
+.applied-legend:has(.legend-item) {
+    flex-direction: row;
+    gap: .25rem .75rem;
+}
+
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    font-size: .8125rem;
+}
+
+.legend-swatch {
+    width: .75rem;
+    height: .75rem;
+    border-radius: 3px;
+}
+
+.applied-filters {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    margin-top: .35rem;
+}
+
+.applied-filter {
+    padding: .4rem .5rem;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--bs-border-radius);
+    background: var(--slate-50);
+}
+
+.applied-filter-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    margin-bottom: .25rem;
+}
+
+.applied-filter-name {
+    font-size: .8125rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.applied-filter-range {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+}
+
+.applied-popup {
+    max-height: 18rem;
+    overflow-y: auto;
+    min-width: 14rem;
+    font-size: .8125rem;
+}
+
+.applied-popup th {
+    font-weight: 600;
+    color: var(--slate-500);
+    overflow-wrap: anywhere;
+}
+
+.applied-popup td {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
 }
 
 /* Keep the toolbar visible next to the open editor side sheet

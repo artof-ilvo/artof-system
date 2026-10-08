@@ -1,0 +1,73 @@
+{% extends "app/base.html" %}
+{% load static %}
+{% block title %}Applied{% endblock %}
+{% block main_class %}app-main py-3{% endblock %}
+{% block content %}
+
+<div class="applied-layout" id="applied-layout"
+     data-field="{{ applied_field }}"
+     data-layer-url="{% url 'core:applied_layer' %}"
+     data-attribute-url="{% url 'core:applied_attribute' %}"
+     data-features-url="{% url 'core:applied_features' %}"
+     data-feature-url="{% url 'core:applied_feature' %}"
+     data-download-url="{% url 'core:applied_download' %}">
+
+    <aside class="card applied-sidebar">
+        <div class="card-body">
+            <form method="GET" action="{% url 'core:applied' %}" class="mb-3" data-busy>
+                <label class="field-label d-block" for="applied-field">Field</label>
+                <select class="form-select" id="applied-field" name="field" data-autosubmit>
+                    {% for name in field_names %}
+                        <option value="{{ name }}" {% if name == applied_field %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+
+            {% if sessions %}
+                <label class="field-label d-block" for="applied-session">Recording</label>
+                <select class="form-select" id="applied-session">
+                    {% for session in sessions %}
+                        <option value="{{ session.id }}" data-layers="{{ session.layers|join:',' }}" data-start="{{ session.start }}">{{ session.id }}{% if session.id == active_session %} (recording){% endif %}</option>
+                    {% endfor %}
+                </select>
+
+                <div class="d-flex align-items-end gap-2 mt-3">
+                    <div class="segmented-field flex-grow-1">
+                        <span class="field-label m-0">Show</span>
+                        <div class="segmented" role="group" aria-label="Layer to show">
+                            <input type="radio" class="btn-check" name="applied-layer" value="sections" id="applied-layer-sections" autocomplete="off" checked>
+                            <label class="btn" for="applied-layer-sections">Sections</label>
+                            <input type="radio" class="btn-check" name="applied-layer" value="points" id="applied-layer-points" autocomplete="off">
+                            <label class="btn" for="applied-layer-points">Points</label>
+                        </div>
+                    </div>
+                    <a class="btn btn-ghost btn-icon" id="applied-download" href="#" title="Download as GeoPackage (QGIS)" aria-label="Download as GeoPackage">{% include "icons/download.html" %}</a>
+                </div>
+
+                <label class="field-label d-block mt-3" for="applied-color">Colour by</label>
+                <select class="form-select" id="applied-color"></select>
+                <div class="applied-legend mt-2" id="applied-legend"></div>
+
+                <div class="d-flex align-items-center justify-content-between mt-3">
+                    <span class="field-label m-0">Filters</span>
+                    <span class="small text-body-secondary" id="applied-count"></span>
+                </div>
+                <div class="applied-filters" id="applied-filters"></div>
+                <select class="form-select form-select-sm mt-2" id="applied-add-filter" aria-label="Add a filter">
+                    <option value="">+ Add filter on…</option>
+                </select>
+            {% else %}
+                <p class="mode-info m-0">No as-applied recordings for this field yet. Start one with the record button on the map page.</p>
+            {% endif %}
+        </div>
+    </aside>
+
+    <div class="card map-shell applied-map" id="applied-map-shell">
+        <div id="applied-map" class="map"></div>
+    </div>
+</div>
+
+{{ field_data|json_script:"field-data" }}
+<script type="module" src="{% static 'js/pages/applied-page.js' %}"></script>
+
+{% endblock %}

@@ -4,27 +4,19 @@ import { get, postForm } from '../../lib/http.js';
 
 // Poll faster while a recording is running, so the map follows the implement.
 const POLL_RECORDING_MS = 2000;
-const POLL_IDLE_MS = 10000;
+const POLL_IDLE_MS = 3000;
 const SELECTION_KEY = 'as-applied-session';
 // Rates are scaled from 0 to at least this value (the default task rate).
 const DEFAULT_MAX_RATE = 100;
 
-/** `flame-weeder_20261008-102412.gpkg` → { implement, start (Date, UTC) }. */
-function parseSessionFile(file) {
-    const match = /^(.*)_(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})\.gpkg$/.exec(file);
-    if (!match) return { implement: file, start: null };
-    const [, implement, year, month, day, hours, minutes, seconds] = match;
-    return { implement, start: new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds)) };
+/** Session id `20261008-102412` (start, UTC) → local date and time. */
+export function sessionLabel(session) {
+    const match = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/.exec(session);
+    if (!match) return session;
+    const [, year, month, day, hours, minutes, seconds] = match;
+    const start = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds));
+    return start.toLocaleString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
-
-function sessionLabel(file) {
-    const { implement, start } = parseSessionFile(file);
-    if (!start) return implement;
-    const when = start.toLocaleString(undefined, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    return `${when} · ${implement}`;
-}
-
-const sessionStart = (file) => file.slice(file.lastIndexOf('_'));
 
 function hexToRgb(hex) {
     const value = parseInt(hex.trim().slice(1), 16);
@@ -32,7 +24,7 @@ function hexToRgb(hex) {
 }
 
 /** Colour of a rate on the sequential ramp defined in app.css (--rate-ramp, --rate-none). */
-class RateColors {
+export class RateColors {
     constructor() {
         const style = getComputedStyle(document.documentElement);
         this.none = style.getPropertyValue('--rate-none').trim();
@@ -76,10 +68,10 @@ export class AsAppliedPanel {
             onEachFeature: (feature, layer) => layer.bindPopup(() => this.popup(feature.properties)),
         }).addTo(map);
 
-        /** Files drawn now, and how many features of each are loaded. */
-        this.shownFiles = [];
-        this.loaded = {};
-        this.state = { sessions: [], active_files: [], recording: this.recordCheck.checked, addon_running: true };
+        /** Session drawn now, and how many of its features are loaded. */
+        this.shownSession = '';
+        this.loaded = 0;
+        this.state = { sessions: [], active_session: '', recording: this.recordCheck.checked, auto_mode: this.recordCheck.disabled, addon_running: true };
 
         try {
             this.select.value = sessionStorage.getItem(SELECTION_KEY) ?? 'latest';
@@ -109,6 +101,14 @@ export class AsAppliedPanel {
         return element;
     }
 
+    /** In auto mode recording follows the navigation state, so the toggle is locked. */
+    setAutoMode(active) {
+        const label = byId('as-applied-record-label');
+        label.dataset.titleManual ??= label.title;
+        this.recordCheck.disabled = active;
+        label.title = active ? label.dataset.titleAuto : label.dataset.titleManual;
+    }
+
     async toggleRecording() {
         try {
             const response = await postForm(this.recordForm.action, new FormData(this.recordForm));
@@ -129,7 +129,7 @@ export class AsAppliedPanel {
 
     async poll() {
         await this.refresh();
-        setTimeout(() => this.poll(), this.state.recording ? POLL_RECORDING_MS : POLL_IDLE_MS);
+        setTimeout(() => this.poll(), this.state.recording || this.state.auto_mode ? POLL_RECORDING_MS : POLL_IDLE_MS);
     }
 
     async refresh() {
@@ -140,55 +140,52 @@ export class AsAppliedPanel {
             console.warn('As-applied sessions could not be loaded', error);
             return;
         }
-        const { recording, addon_running, active_files } = this.state;
-        // Another client may have toggled the recording.
+        const { recording, auto_mode, addon_running, active_session } = this.state;
+        // Another client, or auto mode (through the task-map addon), may have toggled the recording.
         this.recordCheck.checked = recording;
-        byId('as-applied-live').hidden = !(recording && active_files.length > 0);
+        this.setAutoMode(auto_mode);
+        byId('as-applied-live').hidden = !(recording && active_session);
+        byId('as-applied-auto').hidden = !auto_mode;
         byId('as-applied-warning').hidden = !(recording && !addon_running);
         this.renderOptions();
-        await this.loadFiles(this.selectedFiles());
+        await this.loadSession(this.selectedSession());
     }
 
     renderOptions() {
         const selected = this.select.value;
         const options = [new Option('Latest', 'latest'), new Option('Hidden', '')];
-        for (const file of this.state.sessions) options.push(new Option(sessionLabel(file), file));
+        for (const session of this.state.sessions) options.push(new Option(sessionLabel(session), session));
         this.select.replaceChildren(...options);
         this.select.value = options.some((option) => option.value === selected) ? selected : 'latest';
     }
 
-    selectedFiles() {
-        const { sessions, active_files } = this.state;
-        if (this.select.value === '') return [];
-        if (this.select.value !== 'latest') return [this.select.value];
-        if (active_files.length) return active_files;
-        // All implements of the newest session.
-        return sessions.length ? sessions.filter((file) => sessionStart(file) === sessionStart(sessions[0])) : [];
+    selectedSession() {
+        if (this.select.value !== 'latest') return this.select.value;
+        return this.state.active_session || this.state.sessions[0] || '';
     }
 
-    async loadFiles(files) {
-        if (files.join() !== this.shownFiles.join()) {
+    async loadSession(session) {
+        if (session !== this.shownSession) {
             this.layer.clearLayers();
-            this.shownFiles = files;
-            this.loaded = Object.fromEntries(files.map((file) => [file, 0]));
+            this.shownSession = session;
+            this.loaded = 0;
             this.maxRate = DEFAULT_MAX_RATE;
         }
-        byId('as-applied-legend').hidden = files.length === 0;
+        byId('as-applied-legend').hidden = !session;
+        if (!session) return;
 
-        for (const file of files) {
-            const url = new URL(this.panel.dataset.mapUrl, window.location.href);
-            url.search = new URLSearchParams({ file, skip: this.loaded[file] });
-            try {
-                const collection = await (await get(url)).json();
-                // The selection may have changed while waiting.
-                if (this.loaded[file] === undefined) return;
-                this.loaded[file] += collection.features.length;
-                this.layer.addData(collection);
-                this.updateScale(collection.features);
-            } catch (error) {
-                // The addon may be writing the file right now; the next poll retries.
-                console.warn(`As-applied map ${file} could not be loaded`, error);
-            }
+        const url = new URL(this.panel.dataset.mapUrl, window.location.href);
+        url.search = new URLSearchParams({ session, skip: this.loaded });
+        try {
+            const collection = await (await get(url)).json();
+            // The selection may have changed while waiting.
+            if (session !== this.shownSession) return;
+            this.loaded += collection.features.length;
+            this.layer.addData(collection);
+            this.updateScale(collection.features);
+        } catch (error) {
+            // The session may have no sections yet, or the addon is writing right now; the next poll retries.
+            console.warn(`As-applied session ${session} could not be loaded`, error);
         }
     }
 

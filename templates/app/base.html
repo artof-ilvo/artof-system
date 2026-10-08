@@ -40,6 +40,9 @@
                 <a class="nav-link {% if page == 'map' %}active{% endif %}" href="{% url 'core:map' %}">{% include "icons/map.html" %} Map</a>
               </li>
               <li class="nav-item">
+                <a class="nav-link {% if page == 'applied' %}active{% endif %}" href="{% url 'core:applied' %}">{% include "icons/bullseye.html" %} Applied</a>
+              </li>
+              <li class="nav-item">
                 <a class="nav-link {% if page == 'settings' %}active{% endif %}" href="{% url 'core:settings' %}">{% include "icons/sliders.html" %} Settings</a>
               </li>
             </ul>
