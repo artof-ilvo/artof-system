@@ -45,6 +45,19 @@ class RecordToggleTest(SimpleTestCase):
         set_recording.assert_not_called()
 
 
+class AsAppliedStateTest(SimpleTestCase):
+    @mock.patch.object(views.as_applied, 'recorder_alive', return_value=True)
+    @mock.patch.object(views.as_applied, 'is_recording', return_value=False)
+    @mock.patch.object(views.as_applied, 'auto_mode_active', return_value=False)
+    def test_placeholder_session_is_no_session(self, *_):
+        # artof-core initialises string variables that are nil to '-'
+        with mock.patch.object(views.redis_server, 'r') as redis:
+            redis.get.return_value = b'-'
+            self.assertEqual(views.as_applied_state()['active_session'], '')
+            redis.get.return_value = b'20261008-112714'
+            self.assertEqual(views.as_applied_state()['active_session'], '20261008-112714')
+
+
 class AppliedEndpointsTest(SimpleTestCase):
     """Uses a session recorded into the field of the ILVO copy; removed afterwards."""
 

@@ -364,10 +364,12 @@ def map_simulation_position(request):
 
 def as_applied_state():
     """Recording flag, session being recorded, whether the task-map addon runs and whether auto mode drives the flag."""
+    # pc.as_applied.session is a string in config.json, so artof-core initialises it to '-' when it is nil
+    session = (redis_server.r.get(as_applied.REDIS_SESSION) or b'').decode()
     return {
         'recording': as_applied.is_recording(redis_server),
         'auto_mode': as_applied.auto_mode_active(redis_server),
-        'active_session': (redis_server.r.get(as_applied.REDIS_SESSION) or b'').decode(),
+        'active_session': session if as_applied.SESSION_PATTERN.match(session) else '',
         'addon_running': as_applied.recorder_alive(redis_server),
     }
 
