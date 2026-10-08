@@ -67,8 +67,8 @@ class ShapeSection {
         for (const radio of editor.querySelectorAll(`input[name="${CSS.escape(this.name)}"]`)) {
             radio.addEventListener('change', () => this.onModeChange());
         }
-        const fileInput = editor.querySelector('[data-shapefile-url]');
-        fileInput.addEventListener('change', () => this.uploadShapefile(fileInput));
+        this.fileInput = editor.querySelector('[data-shapefile-url]');
+        this.fileInput.addEventListener('change', () => this.uploadShapefile(this.fileInput));
         this.form.addEventListener('show.bs.collapse', (event) => {
             if (event.target === this.form) page.setDrawTarget(this.drawTarget(), this.mode === 'draw');
         });
@@ -115,7 +115,9 @@ class ShapeSection {
         for (const file of input.files) formData.append('files', file);
         try {
             const response = await postForm(input.dataset.shapefileUrl, formData);
-            this.page.updateShape(this.name, await response.json());
+            const { note, ...geometry } = await response.json();
+            this.page.updateShape(this.name, geometry);
+            if (note) showToast(note, 'warning');
         } catch (error) {
             showError('Reading the shape files', error);
         }
@@ -131,8 +133,16 @@ class ShapeSection {
             }
             this.page.updateShape(this.name, { ...this.geometry, empty: false, latlng: features });
         }
+        if (mode === 'file' && this.fileInput.files.length === 0) {
+            showToast('Choose the shape files first.', 'warning');
+            return;
+        }
 
         const formData = new FormData(this.form);
+        // The server stores the uploaded shapefile itself, so its attributes are kept.
+        if (mode === 'file') {
+            for (const file of this.fileInput.files) formData.append('files', file);
+        }
         formData.append('name', this.page.field.name);
         formData.append('input_mode', mode);
         const data = this.isTask ? this.page.field.tasks[this.name] : this.geometry;

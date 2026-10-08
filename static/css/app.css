@@ -389,10 +389,6 @@ input[type="number"] {
     padding: 1.25rem 0 2rem;
 }
 
-.app-main-flush {
-    padding: 0;
-}
-
 .page-header {
     display: flex;
     flex-wrap: wrap;
@@ -898,9 +894,10 @@ input[type="number"] {
     margin: .125rem 0;
 }
 
-/* Keep the toolbar visible next to the open editor side sheet. */
+/* Keep the toolbar visible next to the open editor side sheet
+   (26rem wide, measured from the window edge; the map card is 1rem in from it). */
 .map-shell.is-editing .map-toolbar {
-    right: calc(26rem + .75rem);
+    right: calc(26rem - 1rem + .75rem);
 }
 
 /* Leaflet controls in the same style. */

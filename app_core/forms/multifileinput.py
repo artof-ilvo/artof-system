@@ -1,9 +1,8 @@
 from django import forms
-import geopandas as gpd
-import tempfile
-from django.core.files.uploadedfile import InMemoryUploadedFile
 import os
+import tempfile
 from artof_utils.shapefile import Shapefile
+from ..utils.shapefiles import load_uploaded_gdf, prepare_upload
 
 
 class MultipleFileInput(forms.ClearableFileInput):
@@ -28,28 +27,13 @@ class FileFieldForm(forms.Form):
     files = MultipleFileField()
 
     def load_shapefile(self):
-        tmp_files = []
-        shp_file = None
-        files = self.files.getlist('files')
+        """
+        Loads the uploaded shapefile as it will be stored (see prepare_upload), for a preview.
+        Returns (Shapefile, note); raises ShapefileError when the upload is not a valid shapefile.
+        """
+        gdf, note = prepare_upload(load_uploaded_gdf(self.files.getlist('files')))
 
-        if not files:
-            return shp_file
-
-        try:
-            # Get the temporary system directory
-            temp_dir = tempfile.gettempdir()
-
-            for file in files:
-                if isinstance(file, InMemoryUploadedFile):
-                    with open(os.path.join(temp_dir, file.name), 'wb') as temp_file:
-                        temp_file.write(file.read())
-                        tmp_files.append(temp_file.name)
-            shp_file = Shapefile(temp_dir)
-
-        finally:
-            # Close and remove the temporary file
-            for temp_file in tmp_files:
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
-
-        return shp_file
+        # artof_utils builds the preview (lat/lng) from a shapefile on disk
+        with tempfile.TemporaryDirectory() as folder:
+            gdf.to_file(os.path.join(folder, 'upload.shp'))
+            return Shapefile(folder), note

@@ -10,7 +10,9 @@ async function request(url, options) {
         headers: { 'X-CSRFToken': csrfToken(), ...options.headers },
     });
     if (!response.ok) {
-        throw new Error(`${options.method ?? 'GET'} ${url} failed: ${response.status} ${response.statusText}`);
+        // Views answer errors meant for the user as JSON {message}.
+        const body = await response.clone().json().catch(() => null);
+        throw new Error(body?.message ?? `${options.method ?? 'GET'} ${url} failed: ${response.status} ${response.statusText}`);
     }
     return response;
 }

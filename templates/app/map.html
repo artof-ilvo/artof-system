@@ -1,11 +1,10 @@
 {% extends "app/base.html" %}
 {% load static %}
 {% block title %}Map{% endblock %}
-{% block main_class %}app-main-flush{% endblock %}
-{% block container_class %}px-0{% endblock %}
+{% block main_class %}app-main py-3{% endblock %}
 {% block content %}
 
-<div class="map-shell" id="map-shell">
+<div class="card map-shell" id="map-shell">
     <div id="map-container" class="map" data-simulation-position-url="{% url 'core:map_simulation_position' %}"></div>
 
     <div class="map-toolbar">

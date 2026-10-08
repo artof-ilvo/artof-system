@@ -24,6 +24,15 @@ ILVO_PATH=/var/lib/ilvo DEBUG=0 .venv/bin/daphne -b 127.0.0.1 -p 8000 ilvo.asgi:
 .venv/bin/python manage.py test app_core.tests.TaskFormSetTest.test_formset
 ```
 
+Shapefile tests write field data, so run them against a copy of the ILVO directory (they refuse to run on `/var/lib/ilvo`):
+
+```bash
+cp -r /var/lib/ilvo /tmp/ilvo-test
+ILVO_PATH=/tmp/ilvo-test .venv/bin/python manage.py test app_core.test_shapefiles
+```
+
+Shapes are saved through `app_core/utils/shapefiles.py`: uploads are stored as the uploaded GeoDataFrame (attributes and projected CRS kept), and coordinate-based edits go through `preserving_attributes()`, because `artof_utils`' `Shapefile.update(coordinates)` writes geometry only.
+
 `app_core/tests.py` imports `app_core.forms.task`, which no longer exists, so that test module currently fails to import. There is no linter or JS build configured.
 
 Docker: `docker build -t axelwillekens/artof-system:sqat .` and run with `--network=host -v /var/lib/ilvo:/var/lib/ilvo`. CI (`.github/workflows/ci.yml`) only builds and pushes the image (tag `dev` and version/`latest`).

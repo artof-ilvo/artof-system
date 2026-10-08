@@ -67,7 +67,8 @@ class MapPage {
         this.initDriving();
         this.initEditor();
 
-        fillWindowHeight(byId('map-shell'), 0);
+        // Same margin below the map card as the page padding above it.
+        fillWindowHeight(byId('map-shell'), 16);
         this.map.invalidateSize();
     }
 

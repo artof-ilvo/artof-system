@@ -11,6 +11,8 @@ from artof_utils.helpers import shape as shp
 from artof_utils.schemas.settings import HitchName
 import artof_utils.paths as paths
 from .forms.multifileinput import FileFieldForm
+from .utils.shapefiles import (ShapefileError, load_uploaded_gdf, prepare_upload, preserving_attributes,
+                               sync_geom_type, task_geom_type, utm_crs, xy_to_crs)
 from glob import glob
 from os import path, walk
 import json
@@ -81,18 +83,27 @@ def delete_new_field(request):
     return redirect(reverse('core:field'))
 
 # Field Edit
+def shapefile_error(error):
+    message = str(error) or 'The shape could not be saved.'
+    return JsonResponse({'status': 'error', 'message': message}, status=400)
+
+def uploaded_shape(request, geom_type):
+    # The shapefile uploaded with a save in 'file' mode, with its attributes and coordinate system
+    gdf, _ = prepare_upload(load_uploaded_gdf(request.FILES.getlist('files')), geom_type)
+    return gdf
+
 def field_edit_shapefile(request):
+    # Preview of an uploaded shapefile; the files are uploaded again when the shape is saved
     if request.method == 'POST':
         form = FileFieldForm(request.POST, request.FILES, prefix=None)
         if form.is_valid():
-            shp_file = form.load_shapefile()
-            context = shp_file.context
-            if context:
-                return JsonResponse(shp_file.context)
-            else:
-                return JsonResponse({'status': 'error', 'message': 'Invalid shapefile'}, status=404)
+            try:
+                shp_file, note = form.load_shapefile()
+            except ShapefileError as error:
+                return shapefile_error(error)
+            return JsonResponse({**shp_file.context, 'note': note})
 
-    return JsonResponse({'status': 'error', 'message': 'No shapefile'}, status=404)
+    return JsonResponse({'status': 'error', 'message': 'No shapefile was uploaded.'}, status=400)
 
 def with_field_data(context):
     # Lets templates pass the field to JavaScript safely with the json_script filter
@@ -142,12 +153,18 @@ def field_edit_geofence(request):
     data = json.loads(request.POST.get('data'))
     input_mode = request.POST.get('input_mode')
 
-    if data['empty'] or input_mode == 'drive':
-        latlng = [[0, 0], [0.0, 10.0], [10.0, 10.0], [10.0, 0.0], [0.0, 0.0]]
-        field.update_traject(latlng, epsg=32631)
-    else:
-        latlng = data['latlng']
-        field.update_geofence(latlng, epsg=4326)
+    try:
+        if input_mode == 'file':
+            field.update_geofence(uploaded_shape(request, 'Polygon'))
+            sync_geom_type(field.shp_geofence)
+        elif input_mode != 'original':
+            if data['empty'] or input_mode == 'drive':
+                latlng, epsg = [[0, 0], [0.0, 10.0], [10.0, 10.0], [10.0, 0.0], [0.0, 0.0]], 32631
+            else:
+                latlng, epsg = data['latlng'], 4326
+            preserving_attributes(field.shp_geofence, lambda: field.update_geofence(latlng, epsg=epsg))
+    except (ShapefileError, AssertionError) as error:
+        return shapefile_error(error)
 
     return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
 
@@ -159,12 +176,18 @@ def field_edit_traject(request):
     data = json.loads(request.POST.get('data'))
     input_mode = request.POST.get('input_mode')
 
-    if data['empty'] or input_mode == 'drive':
-        latlng = [[0, 0], [10.0, 10.0]]
-        field.update_traject(latlng, epsg=32631)
-    else:
-        latlng = data['latlng']
-        field.update_traject(latlng, epsg=4326)
+    try:
+        if input_mode == 'file':
+            field.update_traject(uploaded_shape(request, 'LineString'))
+            sync_geom_type(field.shp_traject)
+        elif input_mode != 'original':
+            if data['empty'] or input_mode == 'drive':
+                latlng, epsg = [[0, 0], [10.0, 10.0]], 32631
+            else:
+                latlng, epsg = data['latlng'], 4326
+            preserving_attributes(field.shp_traject, lambda: field.update_traject(latlng, epsg=epsg))
+    except (ShapefileError, AssertionError) as error:
+        return shapefile_error(error)
 
     return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
 
@@ -175,11 +198,21 @@ def field_edit_task(request):
 
     task = json.loads(request.POST.get('data'))
     input_mode = request.POST.get('input_mode')
+    task_name = task['name']
+    task_info = TaskInfo(name=task_name, type=task['type'], implement='' if not task['implement'] else task['implement'], hitch=task['hitch'])
 
-    geometries = None if input_mode == 'original' else task['geometry']['latlng'] # TODO: does not copy the original fields of the geometry!
-    task_info = TaskInfo(name=task['name'], type=task['type'], implement='' if not task['implement'] else task['implement'], hitch=task['hitch'])
-    field.update_task(task['name'], geometries, task_info, epsg=4326)
-    
+    try:
+        if input_mode == 'file':
+            field.update_task(task_name, uploaded_shape(request, task_geom_type(task_info.type)), task_info)
+            sync_geom_type(field.get_task(task_name).shp_task)
+        elif input_mode == 'original':
+            field.update_task(task_name, None, task_info)
+        else:
+            shapefile = field.get_task(task_name).shp_task
+            preserving_attributes(shapefile, lambda: field.update_task(task_name, task['geometry']['latlng'], task_info, epsg=4326))
+    except (ShapefileError, AssertionError) as error:
+        return shapefile_error(error)
+
     return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
 
 
@@ -261,9 +294,23 @@ def update_hitch_settings(request):
     return settings(request)
 
 # Map
+def geometry_in_utm(geometry):
+    # The map editor (operations, rows, drive-in) works in the robot's UTM coordinates,
+    # also for shapes that are stored in another coordinate system
+    if geometry.get('empty') or not geometry.get('wkid'):
+        return
+    target = utm_crs()
+    for key in ('paths', 'rings', 'points'):
+        if key in geometry:
+            geometry[key] = xy_to_crs(geometry[key], 'EPSG:%d' % geometry['wkid'], target)
+    geometry['wkid'] = target.to_epsg()
+
 def map_context():
     robot_manager.load_field()
     map_context = with_field_data(robot_manager.field.context)
+    field_data = map_context['field_data']
+    for geometry in [field_data['traject'], field_data['geofence']] + [t['geometry'] for t in field_data['tasks'].values()]:
+        geometry_in_utm(geometry)
     map_context['simulation'] = {
         'active': robot_manager.get_simulation_mode(),
         'speed_factor': int(robot_manager.get_simulation_speed_factor())
@@ -290,14 +337,21 @@ def map_simulation_position(request):
 
 def map_edit_shape(request):
     shape = request.POST.get('shape')
-    geometries = json.loads(request.POST.get('geometries'))
+    geometries = json.loads(request.POST.get('geometries'))  # in UTM, see geometry_in_utm
+    field = robot_manager.field
 
     if shape == 'traject':
-        robot_manager.field.update_traject(geometries=geometries[0])
+        shapefile, update = field.shp_traject, field.update_traject
+        geometries = geometries[0]
     elif shape == 'geofence':
-        robot_manager.field.update_geofence(geometries=geometries)
+        shapefile, update = field.shp_geofence, field.update_geofence
     else:  # tasks
-        robot_manager.field.update_task(task_name=shape, geometries=geometries)
+        shapefile = field.get_task(shape).shp_task
+        update = lambda geometries: field.update_task(task_name=shape, geometries=geometries)
+
+    # Store in the shapefile's own coordinate system and keep its attributes
+    geometries = xy_to_crs(geometries, utm_crs(), shapefile.gdf.crs)
+    preserving_attributes(shapefile, lambda: update(geometries=geometries))
 
     robot_manager.update_field()
     return redirect(reverse('core:map'))
