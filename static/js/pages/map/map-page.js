@@ -2,9 +2,11 @@ import '../app-base.js';
 import { byId, fillWindowHeight, makeCollapsesExclusive, readJSON, setButtonActive, show } from '../../lib/dom.js';
 import { postForm, postJSON } from '../../lib/http.js';
 import { LiveSocket } from '../../lib/live-socket.js';
+import { FeatureHighlight } from '../../map/feature-highlight.js';
 import { drawGeofence, drawTask, drawTraject } from '../../map/field-layers.js';
 import { createMap, isWellInView } from '../../map/robot-map.js';
 import { RobotLayer } from '../../map/robot-layer.js';
+import { TaskAttributeEditor, taskFeature } from '../task-attributes.js';
 import { PolygonPanel } from './polygon-panel.js';
 import { ShapeEdit } from './shape-edit.js';
 import { TrajectPanel } from './traject-panel.js';
@@ -163,6 +165,11 @@ class MapPage {
             getRobotLocation: () => this.robot.location,
         });
         this.polygonPanel = new PolygonPanel(byId('edit-polygon-shape-panel'), layers);
+        this.featureHighlight = new FeatureHighlight(this.map);
+        this.attributeEditor = new TaskAttributeEditor(byId('edit-task-attribute'), {
+            getFieldName: () => this.field.name,
+            highlightFeature: (taskName, index) => this.featureHighlight.show(taskFeature(this.field, taskName, index)),
+        });
         this.shapeSelect = byId('edit-field-select');
         this.uploadButton = byId('button-upload');
         /** @type {ShapeEdit | null} */
@@ -211,7 +218,9 @@ class MapPage {
         this.trajectPanel.reset();
         this.polygonPanel.reset();
         this.overlayGroup.clearLayers();
+        this.featureHighlight.clear();
         this.uploadButton.disabled = true;
+        this.attributeEditor.setTask(name in this.field.tasks ? name : null);
 
         this.edit = name ? ShapeEdit.forShape(this.field, name, (edit) => {
             this.uploadButton.disabled = !edit.isModified;

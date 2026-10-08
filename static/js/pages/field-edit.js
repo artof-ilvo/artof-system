@@ -2,9 +2,11 @@ import { showError, showToast } from '../components/toast-stack.js';
 import { byId, checkedValue, fillWindowHeight, hideCollapse, makeCollapsesExclusive, readJSON, show, withBusy } from '../lib/dom.js';
 import { postForm } from '../lib/http.js';
 import { LiveSocket } from '../lib/live-socket.js';
+import { FeatureHighlight } from '../map/feature-highlight.js';
 import { drawGeofence, drawTask, drawTraject } from '../map/field-layers.js';
 import { averageCoordinate, createMap, DEFAULT_CENTER, DEFAULT_ZOOM, isPlausibleRobotPosition } from '../map/robot-map.js';
 import { RobotLayer } from '../map/robot-layer.js';
+import { TaskAttributeEditor, taskFeature } from './task-attributes.js';
 
 const FIELD_ZOOM = 18;
 
@@ -153,6 +155,8 @@ class ShapeSection {
             markSaved(this.toggleButton, true);
             hideCollapse(this.form);
             showToast(`${this.toggleButton.textContent.trim()} saved.`);
+            // The shape or task type may have changed the features and their rate/routine.
+            this.page.attributeEditors[this.name]?.load();
         } catch (error) {
             markSaved(this.toggleButton, false);
             showError('Saving', error);
@@ -181,6 +185,7 @@ class FieldEditPage {
         for (const editor of this.root.querySelectorAll('[data-shape-editor]')) new ShapeSection(this, editor);
         this.initNameForm();
         this.initTaskControls();
+        this.initTaskAttributes();
         makeCollapsesExclusive(this.root);
 
         new LiveSocket('/ws/robot/', (data) => this.onRobotData(data));
@@ -212,6 +217,24 @@ class FieldEditPage {
             }
             this.drawnItems.addLayer(layer);
         });
+    }
+
+    initTaskAttributes() {
+        this.featureHighlight = new FeatureHighlight(this.map);
+        this.attributeEditors = {};
+        for (const root of this.root.querySelectorAll('[data-task-attribute]')) {
+            const editor = new TaskAttributeEditor(root, {
+                getFieldName: () => this.field.name,
+                highlightFeature: (taskName, index) => this.highlightFeature(taskName, index),
+            });
+            this.attributeEditors[editor.taskName] = editor;
+            editor.load();
+        }
+    }
+
+    /** Outlines feature `index` of a task on the map; a null task clears it. */
+    highlightFeature(taskName, index) {
+        this.featureHighlight.show(taskFeature(this.field, taskName, index));
     }
 
     isTask(name) {

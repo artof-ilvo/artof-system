@@ -148,3 +148,74 @@ def xy_to_crs(coordinates, from_crs, to_crs):
         return list(transformer.transform(value[0], value[1]))
 
     return transform(coordinates)
+
+
+# Per-feature attribute that the robot uses for each task type: (column, value type, default)
+TASK_ATTRIBUTES = {
+    HitchType.CONTINUOUS: ('rate', float, 100.0),
+    HitchType.CARDAN: ('rate', float, 100.0),
+    HitchType.DISCRETE: ('routine', int, 1),
+    HitchType.INTERMITTENT: ('routine', int, 1),
+}
+
+
+def _attribute_column(gdf, name):
+    """The existing column for attribute `name` (case-insensitive, e.g. 'Rate'), or `name` itself."""
+    return next((column for column in gdf.columns if str(column).lower() == name), name)
+
+
+def _cast(kind, value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise ShapefileError(f'"{value}" is not a number.')
+    if kind is int and not number.is_integer():
+        raise ShapefileError(f'{value} is not a whole number.')
+    return kind(number)
+
+
+def task_attribute(task):
+    """
+    The rate (continuous, cardan) or routine (discrete, intermittent) of every feature of `task`, with the
+    default for features that have none, as {name, type, default, values, stored}; None for other task types.
+    """
+    spec = TASK_ATTRIBUTES.get(task.type)
+    if spec is None:
+        return None
+    name, kind, default = spec
+    shapefile = task.shp_task
+    gdf = shapefile.gdf
+    column = _attribute_column(gdf, name)
+
+    if shapefile.empty:
+        values, stored = [], True
+    elif column in gdf.columns:
+        values = [default if pd.isna(value) else kind(value) for value in gdf[column]]
+        stored = bool(gdf[column].notna().all())
+    else:
+        values, stored = [default] * len(gdf), False
+    return {'name': name, 'type': kind.__name__, 'default': default, 'values': values, 'stored': stored}
+
+
+def set_task_attribute(task, values=None):
+    """
+    Stores the rate/routine of every feature of `task` in its shapefile: `values` in feature order,
+    or (None) the current values with the default for features that have none.
+    """
+    attribute = task_attribute(task)
+    shapefile = task.shp_task
+    if attribute is None or shapefile.empty:
+        return
+    if values is None:
+        if attribute['stored']:
+            return
+        values = attribute['values']
+
+    gdf = shapefile.gdf
+    if len(values) != len(gdf):
+        raise ShapefileError(f'Expected {len(gdf)} values, one per feature, but got {len(values)}.')
+    kind = TASK_ATTRIBUTES[task.type][1]
+    gdf = gdf.copy()
+    gdf[_attribute_column(gdf, attribute['name'])] = [_cast(kind, value) for value in values]
+    shapefile.update(gdf)
+    sync_geom_type(shapefile)

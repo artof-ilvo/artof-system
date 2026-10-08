@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.http import HttpResponse, JsonResponse
 from artof_utils.robot import robot_manager
-from artof_utils.schemas.field import Fields, Field
+from artof_utils.schemas.field import Fields, Field, get_current_field_name
 from artof_utils.schemas.task import TaskInfo
 from artof_utils.helpers import traject
 from artof_utils.helpers import polygon
@@ -12,7 +12,8 @@ from artof_utils.schemas.settings import HitchName
 import artof_utils.paths as paths
 from .forms.multifileinput import FileFieldForm
 from .utils.shapefiles import (ShapefileError, load_uploaded_gdf, prepare_upload, preserving_attributes,
-                               sync_geom_type, task_geom_type, utm_crs, xy_to_crs)
+                               set_task_attribute, sync_geom_type, task_attribute, task_geom_type, utm_crs,
+                               xy_to_crs)
 from glob import glob
 from os import path, walk
 import json
@@ -210,10 +211,31 @@ def field_edit_task(request):
         else:
             shapefile = field.get_task(task_name).shp_task
             preserving_attributes(shapefile, lambda: field.update_task(task_name, task['geometry']['latlng'], task_info, epsg=4326))
+        # Store the default rate/routine for features that have none
+        set_task_attribute(field.get_task(task_name))
     except (ShapefileError, AssertionError) as error:
         return shapefile_error(error)
 
     return render(request, 'app/field_edit.html', context=create_context(field_edit_context(field)))
+
+
+def field_edit_task_attribute(request):
+    # GET: the rate/routine per feature of a task; POST: store new values ({field_name, task_name, values})
+    params = json.loads(request.body) if request.method == 'POST' else request.GET
+    task = Field(params.get('field_name')).get_task(params.get('task_name'))
+    if task is None:
+        return JsonResponse({'status': 'error', 'message': 'Unknown task.'}, status=404)
+
+    if request.method == 'POST':
+        try:
+            set_task_attribute(task, params.get('values', []))
+        except ShapefileError as error:
+            return shapefile_error(error)
+        # Let the robot reload its active field, as for edits on the map page
+        if params.get('field_name') == get_current_field_name():
+            robot_manager.update_field()
+
+    return JsonResponse({'attribute': task_attribute(task)})
 
 
 def field_edit(request):

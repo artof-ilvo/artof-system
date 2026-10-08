@@ -17,13 +17,15 @@ import geopandas as gpd
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase
 from django.urls import reverse
-from shapely.geometry import LineString, MultiLineString, Polygon
+from shapely.geometry import LineString, MultiLineString, Point, Polygon
 
 import artof_utils.paths as paths
 from artof_utils.schemas.field import Field
+from artof_utils.schemas.task import TaskInfo
 
 from .utils.shapefiles import (ShapefileError, attribute_table, load_uploaded_gdf, prepare_upload,
-                               preserving_attributes, utm_crs, xy_to_crs)
+                               preserving_attributes, set_task_attribute, sync_geom_type, task_attribute,
+                               utm_crs, xy_to_crs)
 from .views import geometry_in_utm
 
 FIELD_NAME = 'zz_attribute_test'
@@ -212,3 +214,90 @@ class FieldTests(SimpleTestCase):
         self.assertEqual(stored.crs.to_epsg(), 31370)
         self.assertEqual(attributes(stored), [{'name': 'plot A', 'area_ha': 0.25}])
         self.assertAlmostEqual(stored.to_crs('EPSG:32631').geometry[0].exterior.coords[0][0], X - 6, places=2)
+
+
+def points_gdf(**columns):
+    return gpd.GeoDataFrame(columns, geometry=[Point(X, Y), Point(X + 5, Y), Point(X + 10, Y)], crs='EPSG:32631')
+
+
+class TaskAttributeTests(SimpleTestCase):
+    def setUp(self):
+        shutil.rmtree(os.path.join(paths.fields, FIELD_NAME), ignore_errors=True)
+        self.field = Field(FIELD_NAME)
+        self.field.add_new_task()
+
+    def tearDown(self):
+        shutil.rmtree(os.path.join(paths.fields, FIELD_NAME), ignore_errors=True)
+
+    def make_task(self, task_type, gdf):
+        info = TaskInfo(name='Task1', type=task_type, implement='', hitch='FB')
+        self.field.update_task('Task1', gdf, info)
+        task = self.field.get_task('Task1')
+        sync_geom_type(task.shp_task)
+        return task
+
+    def url(self):
+        return reverse('core:field_edit_task_attribute')
+
+    def test_rate_defaults_to_100_and_is_stored(self):
+        task = self.make_task('continuous', polygon_gdf())
+        attribute = task_attribute(task)
+        self.assertEqual(attribute, {'name': 'rate', 'type': 'float', 'default': 100.0, 'values': [100.0], 'stored': False})
+
+        set_task_attribute(task)
+        stored = read_shape('tasks', 'Task1')
+        self.assertEqual(list(stored['rate']), [100.0])
+        self.assertEqual(stored['name'][0], 'plot A')  # other attributes are kept
+
+    def test_routine_defaults_to_1_and_keeps_existing_values(self):
+        task = self.make_task('discrete', points_gdf(Routine=[3.0, None, 2.0]))
+        attribute = task_attribute(task)
+        self.assertEqual((attribute['name'], attribute['type']), ('routine', 'int'))
+        self.assertEqual(attribute['values'], [3, 1, 2])
+        self.assertFalse(attribute['stored'])
+
+        set_task_attribute(task)
+        stored = read_shape('tasks', 'Task1')
+        self.assertEqual(list(stored['Routine']), [3, 1, 2])  # existing column (any case) is reused
+        self.assertNotIn('routine', stored.columns)
+
+    def test_hitch_task_has_no_attribute(self):
+        self.assertIsNone(task_attribute(self.field.get_task('Task1')))
+
+    def test_endpoint(self):
+        self.make_task('intermittent', points_gdf())
+        query = {'field_name': FIELD_NAME, 'task_name': 'Task1'}
+        response = self.client.get(self.url(), query)
+        self.assertEqual(response.json()['attribute']['values'], [1, 1, 1])
+
+        response = self.client.post(self.url(), {**query, 'values': [4, 5, 6]}, content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['attribute']['values'], [4, 5, 6])
+        self.assertEqual(list(read_shape('tasks', 'Task1')['routine']), [4, 5, 6])
+
+        for values, message in [([1, 2], 'Expected 3 values'), ([1, 2.5, 3], 'whole number')]:
+            response = self.client.post(self.url(), {**query, 'values': values}, content_type='application/json')
+            self.assertEqual(response.status_code, 400)
+            self.assertIn(message, response.json()['message'])
+
+    def test_rate_accepts_decimals(self):
+        self.make_task('cardan', polygon_gdf())
+        response = self.client.post(self.url(), {'field_name': FIELD_NAME, 'task_name': 'Task1', 'values': [87.5]},
+                                    content_type='application/json')
+        self.assertEqual(response.json()['attribute']['values'], [87.5])
+
+    def test_saving_a_task_stores_the_default(self):
+        task = {'name': 'Task1', 'type': 'continuous', 'implement': '', 'hitch': 'FB', 'geometry': {}}
+        payload = {'name': FIELD_NAME, 'input_mode': 'file', 'data': json.dumps(task), 'files': uploaded_files(polygon_gdf())}
+        self.assertEqual(self.client.post(reverse('core:field_edit_task'), payload).status_code, 200)
+        self.assertEqual(list(read_shape('tasks', 'Task1')['rate']), [100.0])
+
+    def test_saving_on_the_active_field_notifies_the_robot(self):
+        self.make_task('continuous', polygon_gdf())
+        query = {'field_name': FIELD_NAME, 'task_name': 'Task1', 'values': [90]}
+        for current_field, notified in [('another_field', False), (FIELD_NAME, True)]:
+            robot = mock.Mock()
+            with mock.patch('app_core.views.get_current_field_name', return_value=current_field), \
+                    mock.patch('app_core.views.robot_manager', robot):
+                self.client.post(self.url(), query, content_type='application/json')
+            self.assertEqual(robot.update_field.called, notified)

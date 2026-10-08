@@ -38,6 +38,7 @@
                     </select>
                 </div>
             </div>
+            <div class="task-attribute" data-task-attribute="{{ task.name }}" data-url="{% url 'core:field_edit_task_attribute' %}" hidden></div>
             {% include "components/container_field_edit.html" with base_id=task.name %}
         </div>
     </form>

@@ -31,7 +31,7 @@ cp -r /var/lib/ilvo /tmp/ilvo-test
 ILVO_PATH=/tmp/ilvo-test .venv/bin/python manage.py test app_core.test_shapefiles
 ```
 
-Shapes are saved through `app_core/utils/shapefiles.py`: uploads are stored as the uploaded GeoDataFrame (attributes and projected CRS kept), and coordinate-based edits go through `preserving_attributes()`, because `artof_utils`' `Shapefile.update(coordinates)` writes geometry only.
+Shapes are saved through `app_core/utils/shapefiles.py`: uploads are stored as the uploaded GeoDataFrame (attributes and projected CRS kept), and coordinate-based edits go through `preserving_attributes()`, because `artof_utils`' `Shapefile.update(coordinates)` writes geometry only. Task features carry a per-feature attribute (`TASK_ATTRIBUTES` there): `rate` (float, default 100) for continuous/cardan and `routine` (int, default 1) for discrete/intermittent. Defaults are written when a task is saved; the field-edit page edits them through `core:field_edit_task_attribute` (`static/js/pages/task-attributes.js`).
 
 `app_core/tests.py` imports `app_core.forms.task`, which no longer exists, so that test module currently fails to import. There is no linter or JS build configured.
 

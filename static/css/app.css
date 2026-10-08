@@ -752,6 +752,46 @@ input[type="number"] {
     margin-top: .875rem;
 }
 
+/* Rate/routine per feature of a task (static/js/pages/task-attributes.js). */
+.task-attribute {
+    padding: .75rem;
+    background: var(--slate-50);
+    border: 1px solid var(--slate-200);
+    border-radius: var(--bs-border-radius);
+}
+
+.task-attribute .set-all {
+    max-width: 13rem;
+}
+
+.attribute-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+    gap: .375rem .75rem;
+    max-height: 14rem;
+    overflow-y: auto;
+    margin-top: .5rem;
+    padding: .125rem;
+}
+
+.attribute-row {
+    display: flex;
+    align-items: center;
+    gap: .375rem;
+    font-size: .75rem;
+    font-weight: 600;
+    color: var(--slate-500);
+    font-variant-numeric: tabular-nums;
+}
+
+.attribute-row span {
+    min-width: 2rem;
+}
+
+.attribute-row .form-control {
+    background: #fff;
+}
+
 .mode-info {
     font-size: .875rem;
     color: var(--slate-500);
@@ -892,6 +932,44 @@ input[type="number"] {
     height: 1px;
     background: var(--slate-200);
     margin: .125rem 0;
+}
+
+/* Name of the selected field, top left next to Leaflet's zoom buttons. */
+.map-field-label.floating-panel {
+    position: absolute;
+    top: .75rem;
+    left: 3.75rem;
+    z-index: 1000;
+    flex-direction: row;
+    gap: .4rem;
+    max-width: calc(100% - 3.75rem - 5rem);
+    padding: .45rem .8rem;
+    color: var(--slate-900);
+    text-decoration: none;
+}
+
+.map-field-label:hover {
+    background: #fff;
+}
+
+.map-field-label .bi {
+    flex-shrink: 0;
+    color: var(--brand);
+}
+
+.map-field-caption {
+    font-size: .6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--slate-500);
+}
+
+.map-field-name {
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Keep the toolbar visible next to the open editor side sheet
