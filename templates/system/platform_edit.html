@@ -315,17 +315,12 @@
     <div class="collapse show" data-item-body>
       <div class="section-body">
         <div class="row g-3">
-          <div class="col-sm-6">
+          <div class="col-12">
             <label class="field-label">Name</label>
             <select class="form-select" data-key="name" data-type="string">
-              {% for name in hitch_names %}<option value="{{ name }}">{{ name }}</option>{% endfor %}
+              {% for name in hitch_names %}<option value="{{ name }}">{{ name }}{% if config_hitch_names is not None and name not in config_hitch_names %} (not in config.json){% endif %}</option>{% endfor %}
             </select>
-            <div class="form-text">Which hitch this is. Tasks and the PLC variables (<code>hitch_&lt;name&gt;</code>) refer to it by this name.</div>
-          </div>
-          <div class="col-sm-6">
-            <label class="field-label">Id</label>
-            <input type="number" class="form-control" data-key="id" data-type="int" step="1" min="0">
-            <div class="form-text">Numeric identifier of the hitch.</div>
+            <div class="form-text">Tasks and the robot refer to the hitch by this name. It must match <code>config.json</code>: the PLC/Redis variables <code>plc.control.hitch_&lt;name&gt;</code> and <code>plc.monitor.hitch_&lt;name&gt;</code> (lower case) are generated from it there.{% if config_hitch_names is not None %} Defined in config.json: <strong>{{ config_hitch_names|join:", "|default:"none" }}</strong>.{% endif %}</div>
           </div>
           <div class="col-sm-4">
             <label class="field-label">Lowest setpoint (cm)</label>
@@ -365,6 +360,8 @@
 </template>
 
 {{ settings_data|json_script:"settings_data" }}
+{{ hitch_names|json_script:"hitch_names" }}
+{{ config_hitch_names|json_script:"config_hitch_names" }}
 {{ raw_json|json_script:"raw_json" }}
 <script type="module" src="{% static 'js/pages/platform-editor.js' %}"></script>
 

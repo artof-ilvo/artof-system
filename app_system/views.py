@@ -25,12 +25,30 @@ SETTINGS_FILES = ('settings.json', 'config.json', 'types.json')
 PLATFORM_SETTINGS_FILE = 'settings.json'
 
 
+def _config_hitch_names():
+    """
+    Hitch names (as in settings.json, upper case) that config.json defines both PLC variable groups for:
+    plc.control.hitch_<name> and plc.monitor.hitch_<name>. Other hitch names make artof-core throw
+    RedisNoSuchVariableException.
+    """
+    try:
+        with open(path.join(paths.base, 'config.json'), 'r') as f:
+            plc = json.load(f)['variables']['plc']
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    groups = []
+    for part in ('control', 'monitor'):
+        groups.append({key[len('hitch_'):] for key in plc.get(part, {}) if key.startswith('hitch_')})
+    return sorted(name.upper() for name in groups[0] & groups[1])
+
+
 def _render_platform_edit(request, data, error=None, status=200, raw_json=None):
     context = {
         'settings_data': data,
         'raw_json': raw_json,
         'types': [t.value for t in HitchType],
         'hitch_names': [n.value for n in HitchName],
+        'config_hitch_names': _config_hitch_names(),
         'vehicle_configs': [c.value for c in VehicleConfig],
         'error': error,
     }
@@ -47,6 +65,16 @@ def _validate_platform_settings(data):
     except ValidationError as e:
         return "Invalid settings: " + "; ".join(
             "%s: %s" % (".".join(str(p) for p in err['loc']), err['msg']) for err in e.errors())
+    names = [hitch.get('name') for hitch in data.get('hitches', [])]
+    if len({name.lower() for name in names}) < len(names):
+        return "Each hitch needs a different name."
+    configured = _config_hitch_names()
+    if configured is not None:
+        missing = [name for name in names if name not in configured]
+        if missing:
+            return ("config.json has no PLC variables for hitch %s: add plc.control.hitch_<name> and "
+                    "plc.monitor.hitch_<name> for it (and the matching PLC data), or use one of: %s."
+                    % (", ".join(missing), ", ".join(configured) or "none"))
     return None
 
 

@@ -164,6 +164,44 @@ class PlatformSettingsEditTest(SimpleTestCase):
         self.assertIn('hitches', response.context['error'])
         self.assertEqual(self.saved(), self.original)
 
+    def test_hitch_without_id_is_saved(self):
+        data = json.loads(self.original_text)
+        data['hitches'][0].pop('id', None)
+        response = self.post(data)
+        self.assertEqual(response.status_code, 302)
+        self.assertNotIn('id', self.saved()['hitches'][0])
+
+    def test_hitch_name_missing_from_config_is_refused(self):
+        data = json.loads(self.original_text)
+        data['hitches'][0]['name'] = 'R'
+        response = self.post(data)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('config.json has no PLC variables for hitch R', response.context['error'])
+        self.assertEqual(self.saved(), self.original)
+
+    def test_new_hitch_name_in_config_is_accepted(self):
+        config_path = os.path.join(paths.base, 'config.json')
+        with open(config_path) as f:
+            config_text = f.read()
+        config = json.loads(config_text)
+        for part in ('control', 'monitor'):
+            config['variables']['plc'][part]['hitch_r'] = 'hitch_%s' % part
+        try:
+            with open(config_path, 'w') as f:
+                json.dump(config, f)
+            data = json.loads(self.original_text)
+            data['hitches'][0]['name'] = 'R'
+            self.assertEqual(self.post(data).status_code, 302)
+            self.assertEqual(self.saved()['hitches'][0]['name'], 'R')
+        finally:
+            with open(config_path, 'w') as f:
+                f.write(config_text)
+
+    def test_duplicate_hitch_names_are_refused(self):
+        data = json.loads(self.original_text)
+        data['hitches'].append(json.loads(json.dumps(data['hitches'][0])))
+        self.assertEqual(self.post(data).status_code, 400)
+
 
 class FakeAddonManager:
     """Stands in for AddonManager so these tests do not touch the `system` key the system manager reads."""

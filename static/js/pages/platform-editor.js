@@ -17,7 +17,9 @@ const form = byId('platform-form');
 const formPane = byId('form-pane');
 const json = new JsonEditor(byId('json-editor'), byId('line-numbers'), byId('line-numbers-container'));
 const preview = new PlatformPreview(byId('preview-top'), byId('preview-side'));
-const HITCH_NAMES = ['FF', 'FB', 'RB'];
+const HITCH_NAMES = readJSON('hitch_names');
+// Hitch names config.json has PLC variables for (null when config.json could not be read).
+const CONFIG_HITCH_NAMES = readJSON('config_hitch_names');
 
 let settings;
 let activeHitch = null;
@@ -160,9 +162,9 @@ function newItem(listName) {
     const nextId = Math.max(0, ...items.map((item) => Number(item.id) || 0)) + 1;
     if (listName === 'hitches') {
         const used = new Set(items.map((hitch) => hitch.name));
+        const usable = CONFIG_HITCH_NAMES ?? HITCH_NAMES;
         return {
-            id: nextId,
-            name: HITCH_NAMES.find((name) => !used.has(name)) ?? HITCH_NAMES[0],
+            name: usable.find((name) => !used.has(name)) ?? HITCH_NAMES.find((name) => !used.has(name)) ?? HITCH_NAMES[0],
             min: 0, max: 50, types: ['hitch'], transform: transform(), link_length: 0.5,
         };
     }
@@ -244,7 +246,8 @@ function validateForm() {
     const names = settings.hitches.map((hitch) => hitch.name);
     for (const element of formPane.querySelectorAll('[data-list="hitches"] [data-item]')) {
         const hitch = settings.hitches[Number(element.dataset.index)];
-        const badName = names.filter((name) => name === hitch.name).length > 1;
+        const badName = names.filter((name) => name === hitch.name).length > 1
+            || (CONFIG_HITCH_NAMES !== null && !CONFIG_HITCH_NAMES.includes(hitch.name));
         const badRange = Number(hitch.max) < Number(hitch.min);
         mark(element.querySelector('[data-key="name"]'), badName);
         mark(element.querySelector('[data-key="max"]'), badRange);
