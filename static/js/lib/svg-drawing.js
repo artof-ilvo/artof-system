@@ -1,5 +1,5 @@
 // Helpers for the schematic SVG drawings of the robot (implement and settings editors).
-// World coordinates are metres in the GPS frame of settings.json (+x left, +y forward, +z up);
+// World coordinates are metres in the GPS frame of settings.json (+x right, +y forward, +z up);
 // drawings use PX_PER_M svg units per metre and are fitted to their element with a viewBox.
 
 const SVG_NS = 'http://www.w3.org/2000/svg';

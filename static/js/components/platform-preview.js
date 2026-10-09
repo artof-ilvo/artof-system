@@ -1,6 +1,6 @@
 // SVG top and side view of the robot as settings.json describes it, for the settings editor.
 //
-// Everything is in the GPS frame (+x left, +y forward, +z up), as artof-core's Platform::updateState:
+// Everything is in the GPS frame (+x right, +y forward, +z up), as artof-core's Platform::updateState:
 // robot reference point, rotation centre, head and hitches are transforms from the frame origin.
 // The antenna sits at -gps.T (the GPS transform goes from the antenna to the origin; its rotation is
 // ignored here). Hitch balls are drawn with the hitch lowered: hitch T + (0, -link_length, 0).
@@ -44,9 +44,9 @@ export class PlatformPreview {
     draw(settings, activeHitch = null) {
         this.last = [settings, activeHitch];
         const data = geometry(settings);
-        // Top view: world x (left) to svg left, world y (forward) up.
-        this.drawView(this.topSvg, data, activeHitch, (p) => [-p[0] * PX_PER_M, -p[1] * PX_PER_M], 'top');
-        // Side view from the right: forward to the left, z up.
+        // Top view: world x (right) to svg right, world y (forward) up.
+        this.drawView(this.topSvg, data, activeHitch, (p) => [p[0] * PX_PER_M, -p[1] * PX_PER_M], 'top');
+        // Side view from the robot's left side: forward to the left, z up.
         this.drawView(this.sideSvg, data, activeHitch, (p) => [-p[1] * PX_PER_M, -p[2] * PX_PER_M], 'side');
     }
 

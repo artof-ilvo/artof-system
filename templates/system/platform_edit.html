@@ -59,7 +59,7 @@
           </button>
           <div class="collapse" id="platform-guide">
             <div class="section-body small">
-              <p>All positions (<code>transform</code>) are in metres in one robot frame, the <strong>GPS frame</strong>: <strong>+x is left</strong>, <strong>+y is forward</strong>, <strong>+z is up</strong>. <code>T</code> is the position [x, y, z], <code>R</code> the rotation [roll, pitch, yaw] in degrees (usually 0).</p>
+              <p>All positions (<code>transform</code>) are in metres in one robot frame, the <strong>GPS frame</strong>: <strong>+x is right</strong>, <strong>+y is forward</strong>, <strong>+z is up</strong>. <code>T</code> is the position [x, y, z], <code>R</code> the rotation [roll, pitch, yaw] in degrees (usually 0).</p>
               <p>The <strong>GPS transform</strong> places the origin of this frame relative to the antenna position the receiver reports. The robot reference point, the rotation centre, the head and every hitch are then placed relative to that origin.</p>
               <p class="mb-0">Implements hang off a hitch: their sections are placed relative to the <strong>hitch ball</strong>, which is the hitch position moved back by the hitch's link length (see Admin → Implements).</p>
             </div>
@@ -257,8 +257,8 @@
         <div class="card-body">
           <div class="field-label">Top view</div>
           <svg class="implement-preview" id="preview-top" role="img" aria-label="Robot seen from above"></svg>
-          <div class="implement-preview-key mt-1">↑ forward (+y) · ← left (+x) · seen from above</div>
-          <div class="field-label mt-3">Side view <span class="text-body-secondary fw-normal">(from the right-hand side)</span></div>
+          <div class="implement-preview-key mt-1">↑ forward (+y) · → right (+x) · seen from above</div>
+          <div class="field-label mt-3">Side view <span class="text-body-secondary fw-normal">(from the left-hand side)</span></div>
           <svg class="implement-preview implement-preview-side" id="preview-side" role="img" aria-label="Robot seen from the side"></svg>
           <div class="implement-preview-key mt-1">← forward (+y) · ↑ up (+z)</div>
           <p class="form-text mb-0">Hitches are drawn lowered (angle 0): filled dot = hitch, open circle = hitch ball. The GPS antenna is drawn without its rotation.</p>

@@ -4,7 +4,7 @@
 // settings.json: section origin = hitch T + hinge(hitch link_length) + hinge(section link_length) + section T,
 // with hinge(l) = (0, -l, 0) at hitch angle 0. A section with `repeats` n becomes n copies shifted by
 // i * offset along x. Its footprint is x in ±width/2, y in [-down, up], turned by the yaw R[2].
-// Axes: +x left, +y forward, +z up; the top view is drawn with forward up and +x to the left.
+// Axes: +x right, +y forward, +z up; the top view is drawn with forward up and +x to the right.
 import { Bounds, PX_PER_M, drawScale, el, fit, num, redrawOnResize, robotCentre, vec } from '../lib/svg-drawing.js';
 
 /** Section copies as artof-core expands them, in the GPS frame. */
@@ -70,8 +70,8 @@ export class ImplementPreview {
     drawTop({ hitchT, ball, copies }, hitch, activeIndex) {
         const svg = this.topSvg;
         svg.replaceChildren();
-        // World (x left, y forward) to svg (right, down).
-        const sx = (x) => -x * PX_PER_M;
+        // World (x right, y forward) to svg (right, down).
+        const sx = (x) => x * PX_PER_M;
         const sy = (y) => -y * PX_PER_M;
         const bounds = new Bounds();
         const addWorld = (x, y) => bounds.add(sx(x), sy(y));
@@ -100,7 +100,7 @@ export class ImplementPreview {
         if (robotRect) {
             el('rect', {
                 class: 'ip-robot',
-                x: sx(robotRect.x1), y: sy(robotRect.y1),
+                x: sx(robotRect.x0), y: sy(robotRect.y1),
                 width: (robotRect.x1 - robotRect.x0) * PX_PER_M, height: (robotRect.y1 - robotRect.y0) * PX_PER_M,
                 rx: stroke * 4, 'stroke-width': stroke,
             }, svg);
@@ -142,7 +142,7 @@ export class ImplementPreview {
     drawSide({ hitchT, ball, copies }, hitch, activeIndex) {
         const svg = this.sideSvg;
         svg.replaceChildren();
-        // Seen from the robot's right side: forward (+y) is drawn to the left, z up.
+        // Seen from the robot's left side (+x is right): forward (+y) is drawn to the left, z up.
         const sx = (y) => -y * PX_PER_M;
         const sy = (z) => -z * PX_PER_M;
         const bounds = new Bounds();

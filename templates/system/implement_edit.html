@@ -79,9 +79,9 @@
             <div class="section-body small">
               <p>An implement is a list of <strong>sections</strong>, the parts that are switched on and off (or given a rate) independently, such as nozzles, burners or a probe.</p>
               <p><strong>Where a section sits.</strong> Each section is positioned relative to the <strong>hitch ball</strong>: the end of the hitch's lifting arm (hitch position from <code>settings.json</code>, moved back by the hitch's link length). From there an optional section <em>link length</em> moves it further back, and then the section transform <code>T</code> moves it to its origin.</p>
-              <p><strong>Axes</strong> (metres, seen from above): <strong>+x is left</strong>, <strong>+y is forward</strong> (driving direction), <strong>+z is up</strong>. A section at <code>y = -1</code> works 1 m behind the hitch ball.</p>
+              <p><strong>Axes</strong> (metres, seen from above): <strong>+x is right</strong>, <strong>+y is forward</strong> (driving direction), <strong>+z is up</strong>. A section at <code>y = -1</code> works 1 m behind the hitch ball.</p>
               <p><strong>Footprint.</strong> Around its origin a section covers a rectangle <em>width</em> wide (centred on x), reaching <em>up</em> in front and <em>down</em> behind. The robot checks this rectangle against the task map to decide the section's rate, and the as-applied map records it.</p>
-              <p class="mb-0"><strong>Repeats.</strong> A boom of identical nozzles is a single section with <em>repeats</em> = number of nozzles and <em>offset</em> = spacing. Copy <em>i</em> is shifted <em>i × offset</em> along +x and named <code>&lt;id&gt;0</code>, <code>&lt;id&gt;1</code>, … So put <code>T.x</code> at the rightmost copy (the most negative x).</p>
+              <p class="mb-0"><strong>Repeats.</strong> A boom of identical nozzles is a single section with <em>repeats</em> = number of nozzles and <em>offset</em> = spacing. Copy <em>i</em> is shifted <em>i × offset</em> along +x and named <code>&lt;id&gt;0</code>, <code>&lt;id&gt;1</code>, … So put <code>T.x</code> at the leftmost copy (the most negative x).</p>
             </div>
           </div>
         </div>
@@ -109,8 +109,8 @@
         <div class="card-body">
           <div class="field-label">Top view</div>
           <svg class="implement-preview" id="preview-top" role="img" aria-label="Implement seen from above"></svg>
-          <div class="implement-preview-key mt-1">↑ forward (+y) · ← left (+x) · seen from above</div>
-          <div class="field-label mt-3">Side view <span class="text-body-secondary fw-normal">(from the right-hand side)</span></div>
+          <div class="implement-preview-key mt-1">↑ forward (+y) · → right (+x) · seen from above</div>
+          <div class="field-label mt-3">Side view <span class="text-body-secondary fw-normal">(from the left-hand side)</span></div>
           <svg class="implement-preview implement-preview-side" id="preview-side" role="img" aria-label="Implement seen from the side"></svg>
           <div class="implement-preview-key mt-1">← forward (+y) · ↑ up (+z)</div>
           <p class="form-text mb-0" id="preview-note"></p>
@@ -168,7 +168,7 @@
           <div class="col-sm-6">
             <label class="field-label">Offset (m)</label>
             <input type="number" class="form-control" data-key="offset" step="0.001" placeholder="0">
-            <div class="form-text">Spacing between copies along +x (left). Equal to the width for a boom without gaps.</div>
+            <div class="form-text">Spacing between copies along +x (to the right). Equal to the width for a boom without gaps.</div>
           </div>
           <div class="col-12">
             <span class="field-label d-block">Position T relative to hitch ball (m)</span>
@@ -177,7 +177,7 @@
               <span class="input-group-text">y</span><input type="number" class="form-control" data-key="T.1" step="0.001" aria-label="T y">
               <span class="input-group-text">z</span><input type="number" class="form-control" data-key="T.2" step="0.001" aria-label="T z">
             </div>
-            <div class="form-text">+x left, +y forward, +z up. Negative y is behind the hitch ball, negative z below it.</div>
+            <div class="form-text">+x right, +y forward, +z up. Negative y is behind the hitch ball, negative z below it.</div>
           </div>
           <div class="col-12">
             <span class="field-label d-block">Rotation R (degrees)</span>
