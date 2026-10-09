@@ -113,20 +113,21 @@ class AddonManager(JobManager):
             addon["Idx"] = i + 1
             addon["ContainerId"] = addon["ContainerId"][:12] if "ContainerId" in addon else "N/A"
             addon["StartTime"] = format_datetime(addon["StartTimeISO"]) if "StartTimeISO" in addon else "N/A"
-            addon["Status"] = "Running" if addon["Running"] else "Stopped"
+            # A just-added addon has no Running yet until the system manager picks it up.
+            addon["Status"] = "Running" if addon.get("Running") else "Stopped"
             addons.append(addon)
         return addons
 
     def new_addon(self):
+        # No registry login: an empty username/password is still sent to Docker as credentials.
         addon = {
-            "Name": "new_addon",
+            "Name": "",
+            "AutoStart": True,
             "DockerRegistry": {
-                "username": "",
-                "password": "",
-                "serveraddress": "https://hub.docker.com/v2/"
+                "serveraddress": "https://registry.hub.docker.com/v2/"
             },
             "DockerConfig": {
-                "Image": "registryserver/image_name",
+                "Image": "",
                 "HostConfig": {
                     "Binds": [
                         "/var/lib/ilvo:/var/lib/ilvo"
@@ -139,6 +140,4 @@ class AddonManager(JobManager):
                 }
             }
         }
-        
-        addon["Json"] = json.dumps(addon, indent=4)
         return addon

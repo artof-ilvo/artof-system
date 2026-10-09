@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from os import path
 import copy
 import json
+import re
 
 
 # Create your views here.
@@ -158,28 +159,108 @@ def update_addon(request):
     return redirect(reverse('system:addon'))
 
 
+# Keys the system manager (artof-core IlvoJobData/IlvoAddon) keeps up to date itself.
+ADDON_RUNTIME_KEYS = ('ContainerId', 'Running', 'Pid', 'ExitCode', 'ErrorMessage', 'StartTimeISO',
+                      'StartCommand', 'StopCommand', 'UpdateCommand')
+ADDON_IMAGE_PLACEHOLDER = 'registryserver/image_name'
+# Docker container names: https://github.com/moby/moby/blob/master/daemon/names/names.go
+DOCKER_NAME = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]+$')
+
+
+def _addon_config(addon):
+    """The part of an addon entry that is edited (everything except the runtime keys)."""
+    return {key: value for key, value in addon.items() if key not in ADDON_RUNTIME_KEYS}
+
+
+def _validate_addon(data, original_name, existing_names):
+    """
+    Returns an error message, or None when the system manager can use `data`.
+    The manager crashes on an addon without DockerConfig.Image, and loops until it crashes when the image cannot be
+    found or pulled, so those are refused here.
+    """
+    if not isinstance(data, dict):
+        return "The addon must be a JSON object."
+    name = data.get('Name')
+    if not isinstance(name, str) or not DOCKER_NAME.match(name):
+        return "The name must be at least 2 characters: letters, digits, '_', '.' or '-', starting with a letter or digit."
+    if original_name and name != original_name:
+        return "An addon cannot be renamed: the system manager would keep the old one. Delete it and add a new one."
+    if not original_name and name in existing_names:
+        return "An addon named \"%s\" already exists." % name
+    config = data.get('DockerConfig')
+    if not isinstance(config, dict):
+        return "DockerConfig must be an object with at least an Image."
+    image = config.get('Image')
+    if not isinstance(image, str) or not image.strip() or image.strip() == ADDON_IMAGE_PLACEHOLDER:
+        return "DockerConfig.Image must name a Docker image, e.g. axelwillekens/artof-taskmap-addon:dev."
+    if any(c.isspace() for c in image):
+        return "The image name cannot contain spaces."
+    if not isinstance(data.get('DockerRegistry', {}), dict):
+        return "DockerRegistry must be an object."
+    host = config.get('HostConfig', {})
+    if not isinstance(host, dict):
+        return "DockerConfig.HostConfig must be an object."
+    binds = host.get('Binds', [])
+    if not isinstance(binds, list) or not all(isinstance(b, str) and ':' in b for b in binds):
+        return "HostConfig.Binds must be a list of \"host path:container path\" strings."
+    env = config.get('Env', [])
+    if not isinstance(env, list) or not all(isinstance(e, str) and '=' in e for e in env):
+        return "DockerConfig.Env must be a list of \"NAME=value\" strings."
+    if 'AutoStart' in data and not isinstance(data['AutoStart'], bool):
+        return "AutoStart must be true or false."
+    return None
+
+
+def _render_addon_edit(request, data, original_name, status_info=None, error=None, status=200, raw_json=None):
+    context = {
+        'addon_data': data,
+        'original_name': original_name,
+        'status_info': status_info,
+        'error': error,
+        'raw_json': raw_json,
+    }
+    return render(request, "system/addon_edit.html", context, status=status)
+
+
 def edit_addon(request):
     manager = AddonManager()
     if request.method == 'POST':
-        name = request.POST.get('name', '')
-        data = json.loads(request.POST.get('data', ''))
-        data["Name"] = name
-        manager.edit(name, data)
+        original_name = request.POST.get('original_name', '')
+        raw = request.POST.get('data', '')
+        existing = {addon.get('Name'): addon for addon in manager.jobs}
+        if original_name and original_name not in existing:
+            return HttpResponse("Addon not found", status=404)
+        try:
+            data = json.loads(raw)
+        except ValueError as e:
+            return _render_addon_edit(request, {'Name': original_name}, original_name, error="Invalid JSON: %s" % e,
+                                      status=400, raw_json=raw)
+        error = _validate_addon(data, original_name, existing.keys())
+        if error:
+            return _render_addon_edit(request, data, original_name, error=error, status=400)
 
+        # Keep what the system manager reports (container id, state, commands); replace the configuration.
+        entry = {key: value for key, value in existing.get(original_name, {}).items() if key in ADDON_RUNTIME_KEYS}
+        entry.update(_addon_config(data))
+        manager.edit(entry['Name'], entry)
         return redirect(reverse('system:addon'))
 
     elif request.method == 'GET':
         addon_name = request.GET.get('name', '')
         if addon_name == "new_addon":
-            addon = manager.new_addon()
-        else:
-            addon = [addon for addon in manager.get() if addon["Name"] == addon_name]
-            if len(addon) == 0:
-                return HttpResponse("Addon not found", status=404)
-            else:
-                addon = addon[0]
-
-        return render(request, "system/editor.html", context=addon)
+            return _render_addon_edit(request, _addon_config(manager.new_addon()), '')
+        addon = next((addon for addon in manager.get() if addon["Name"] == addon_name), None)
+        if addon is None:
+            return HttpResponse("Addon not found", status=404)
+        status_info = {
+            'running': addon['Status'] == 'Running',
+            'container': addon['ContainerId'],
+            'started': addon['StartTime'],
+            'exit_code': addon.get('ExitCode'),
+            'error': addon.get('ErrorMessage'),
+        }
+        config = _addon_config({k: v for k, v in addon.items() if k not in ('Json', 'Idx', 'StartTime', 'Status')})
+        return _render_addon_edit(request, config, addon_name, status_info)
     else:
         # Handle other HTTP methods if needed
         return HttpResponse('Unsupported method', status=405)

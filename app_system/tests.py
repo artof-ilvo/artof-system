@@ -7,6 +7,7 @@ These tests write implement files: run them against a copy of the ILVO directory
 """
 import json
 import os
+from unittest import mock
 
 from django.test import SimpleTestCase
 from django.urls import reverse
@@ -162,3 +163,102 @@ class PlatformSettingsEditTest(SimpleTestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('hitches', response.context['error'])
         self.assertEqual(self.saved(), self.original)
+
+
+class FakeAddonManager:
+    """Stands in for AddonManager so these tests do not touch the `system` key the system manager reads."""
+    jobs = []
+    edits = []
+
+    def __init__(self):
+        pass
+
+    def get(self):
+        return [dict(job, Json='', Idx=1, StartTime='', Status='Running' if job.get('Running') else 'Stopped',
+                     ContainerId=job.get('ContainerId', 'N/A')[:12]) for job in FakeAddonManager.jobs]
+
+    def new_addon(self):
+        from app_system.utils.job import AddonManager
+        return AddonManager.new_addon(self)
+
+    def edit(self, name, value):
+        FakeAddonManager.edits.append((name, value))
+
+
+ADDON = {'Name': 'taskmap', 'AutoStart': True,
+         'DockerRegistry': {'serveraddress': 'https://registry.hub.docker.com/v2/'},
+         'DockerConfig': {'Image': 'axelwillekens/artof-taskmap-addon:dev',
+                          'Env': ['TASKMAP_MIN_DISTANCE=0.1'],
+                          'HostConfig': {'Binds': ['/var/lib/ilvo:/var/lib/ilvo'], 'NetworkMode': 'host',
+                                         'RestartPolicy': {'Name': 'on-failure', 'MaximumRetryCount': 3}}}}
+RUNNING = {'ContainerId': '0af8ab3207e852b7', 'Running': True, 'Pid': 12, 'ExitCode': -1, 'ErrorMessage': '',
+           'StartTimeISO': '2026-10-09T11:33:16', 'StartCommand': False, 'StopCommand': False,
+           'UpdateCommand': False}
+
+
+@mock.patch('app_system.views.AddonManager', FakeAddonManager)
+class AddonEditTest(SimpleTestCase):
+    def setUp(self):
+        FakeAddonManager.jobs = [dict(json.loads(json.dumps(ADDON)), **RUNNING)]
+        FakeAddonManager.edits = []
+
+    def post(self, data, original_name=''):
+        raw = data if isinstance(data, str) else json.dumps(data)
+        return self.client.post(reverse('system:edit_addon'), {'data': raw, 'original_name': original_name})
+
+    def new(self, **changes):
+        data = json.loads(json.dumps(ADDON))
+        data['Name'] = 'other'
+        for key, value in changes.items():
+            data[key] = value
+        return data
+
+    def test_new_form_has_no_placeholder_or_empty_login(self):
+        response = self.client.get(reverse('system:edit_addon'), {'name': 'new_addon'})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'system/addon_edit.html')
+        data = response.context['addon_data']
+        self.assertEqual(data['DockerConfig']['Image'], '')
+        self.assertNotIn('username', data['DockerRegistry'])
+
+    def test_existing_form_hides_runtime_keys(self):
+        response = self.client.get(reverse('system:edit_addon'), {'name': 'taskmap'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['addon_data'], ADDON)
+        self.assertTrue(response.context['status_info']['running'])
+
+    def test_new_addon_is_added(self):
+        response = self.post(self.new())
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(FakeAddonManager.edits, [('other', self.new())])
+
+    def test_edit_keeps_runtime_keys(self):
+        data = json.loads(json.dumps(ADDON))
+        data['DockerConfig']['Env'] = ['TASKMAP_MIN_DISTANCE=0.5']
+        response = self.post(data, original_name='taskmap')
+        self.assertEqual(response.status_code, 302)
+        name, saved = FakeAddonManager.edits[0]
+        self.assertEqual(saved['ContainerId'], RUNNING['ContainerId'])
+        self.assertEqual(saved['DockerConfig']['Env'], ['TASKMAP_MIN_DISTANCE=0.5'])
+
+    def test_inputs_that_crash_the_system_manager_are_refused(self):
+        no_image = self.new()
+        del no_image['DockerConfig']['Image']
+        placeholder = self.new()
+        placeholder['DockerConfig']['Image'] = 'registryserver/image_name'
+        for data in (no_image, placeholder, self.new(DockerConfig='x'), self.new(Name=''),
+                     self.new(Name='bad name'), self.new(Name='taskmap')):
+            response = self.post(data)
+            self.assertEqual(response.status_code, 400, data)
+        self.assertEqual(FakeAddonManager.edits, [])
+
+    def test_rename_is_refused(self):
+        data = json.loads(json.dumps(ADDON))
+        data['Name'] = 'taskmap2'
+        self.assertEqual(self.post(data, original_name='taskmap').status_code, 400)
+        self.assertEqual(FakeAddonManager.edits, [])
+
+    def test_invalid_json_keeps_text(self):
+        response = self.post('{"Name": ', original_name='taskmap')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.context['raw_json'], '{"Name": ')
