@@ -1,11 +1,9 @@
 // Implement editor (system:implement_edit): form or JSON mode on the same implement object,
 // with a live top/side preview. The form posts the implement as JSON in the hidden `data` field.
-import { byId, checkedValue, readJSON } from '../lib/dom.js';
+import { byId, readJSON } from '../lib/dom.js';
+import { initEditorModes } from '../components/editor-modes.js';
 import { JsonEditor } from '../components/json-editor.js';
 import { ImplementPreview } from '../components/implement-preview.js';
-import { showToast } from '../components/toast-stack.js';
-
-const MODE_KEY = 'implement-editor-mode';
 // Section keys that artof-core treats as optional: an empty input removes them from the JSON.
 const OPTIONAL_KEYS = new Set(['link_length', 'repeats', 'offset']);
 
@@ -238,95 +236,28 @@ function draw() {
 
 hitchSelect.addEventListener('change', draw);
 
-// ------------------------------------------------------------------ Modes
-
-const formPane = byId('form-pane');
-const jsonPane = byId('json-pane');
-const formatButton = byId('format-button');
-
-function showMode(mode) {
-    formPane.hidden = mode !== 'form';
-    jsonPane.hidden = mode !== 'json';
-    formatButton.hidden = mode !== 'json';
-    byId(`editor-mode-${mode}`).checked = true;
-    try { localStorage.setItem(MODE_KEY, mode); } catch { /* storage unavailable */ }
-}
-
-/** Parses the JSON pane into an implement, or shows why it cannot. */
-function implementFromJson() {
-    const { value, error } = json.tryParse();
-    if (error) {
-        showToast(`Invalid JSON: ${error.message}`, 'danger');
-        return null;
-    }
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        showToast('The implement must be a JSON object ({ … }).', 'danger');
-        return null;
-    }
-    return normalise(value);
-}
-
-form.addEventListener('change', (event) => {
-    if (event.target.name !== 'editor-mode') return;
-    if (event.target.value === 'json') {
-        json.setValue(JSON.stringify(implement, null, 2));
-        showMode('json');
-    } else {
-        const parsed = implementFromJson();
-        if (!parsed) {
-            showMode('json');
-            return;
-        }
-        implement = parsed;
-        activeIndex = null;
-        renderGeneral();
-        renderSections();
-        updateHitchOptions();
-        draw();
-        showMode('form');
-    }
-});
-
-// Keep the preview in step with valid JSON while typing.
-byId('json-editor').addEventListener('input', () => {
-    const { value } = json.tryParse();
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-        preview.draw(normalise(structuredClone(value)), selectedHitch(), null);
-    }
-});
-
-formatButton.addEventListener('click', () => json.format());
-
-form.addEventListener('submit', (event) => {
-    if (checkedValue('editor-mode', form) === 'json') {
-        const parsed = implementFromJson();
-        if (!parsed) {
-            event.preventDefault();
-            return;
-        }
-        implement = parsed;
-    } else if (!validateForm()) {
-        event.preventDefault();
-        showToast('Fix the marked fields before saving.', 'warning');
-        return;
-    }
-    byId('implement-data').value = JSON.stringify(implement);
-});
-
-// ------------------------------------------------------------------- Start
+// ------------------------------------------------------------------ Start
 
 renderGeneral();
 renderSections();
 updateHitchOptions();
 draw();
 
-if (rawJson !== null) {
-    // The server rejected JSON it could not parse: show it as it was typed.
-    json.setValue(rawJson);
-    showMode('json');
-} else {
-    let mode = 'form';
-    try { mode = localStorage.getItem(MODE_KEY) === 'json' ? 'json' : 'form'; } catch { /* storage unavailable */ }
-    if (mode === 'json') json.setValue(JSON.stringify(implement, null, 2));
-    showMode(mode);
-}
+initEditorModes({
+    form,
+    json,
+    dataInput: byId('implement-data'),
+    storageKey: 'implement-editor-mode',
+    rawJson,
+    getValue: () => implement,
+    setValue: (value) => {
+        implement = normalise(value);
+        activeIndex = null;
+        renderGeneral();
+        renderSections();
+        updateHitchOptions();
+        draw();
+    },
+    previewJson: (value) => preview.draw(normalise(structuredClone(value)), selectedHitch(), null),
+    validateForm,
+});

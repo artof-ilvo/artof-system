@@ -99,3 +99,66 @@ class ImplementEditTest(SimpleTestCase):
         self.assertEqual(response.status_code, 400)
         with open(implement_file(NAME)) as f:
             self.assertEqual(json.load(f)['types'], ['continuous'])
+
+
+class PlatformSettingsEditTest(SimpleTestCase):
+    def setUp(self):
+        with open(paths.platform_settings) as f:
+            self.original_text = f.read()
+        self.original = json.loads(self.original_text)
+
+    def tearDown(self):
+        with open(paths.platform_settings, 'w') as f:
+            f.write(self.original_text)
+
+    def post(self, data, name='settings.json'):
+        raw = data if isinstance(data, str) else json.dumps(data)
+        return self.client.post(reverse('system:edit_settings'), {'data': raw, 'name': name})
+
+    def saved(self):
+        with open(paths.platform_settings) as f:
+            return json.load(f)
+
+    def test_settings_json_renders_form(self):
+        response = self.client.get(reverse('system:edit_settings'), {'filename': 'settings.json'})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'system/platform_edit.html')
+        self.assertEqual(response.context['settings_data'], self.original)
+
+    def test_other_files_keep_json_editor(self):
+        response = self.client.get(reverse('system:edit_settings'), {'filename': 'types.json'})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'system/editor.html')
+
+    def test_unknown_file_is_refused(self):
+        response = self.client.get(reverse('system:edit_settings'), {'filename': '../etc/passwd'})
+        self.assertEqual(response.status_code, 404)
+        response = self.post({'a': 1}, name='../zz_escape.json')
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(os.path.exists(os.path.join(os.path.dirname(paths.base), 'zz_escape.json')))
+
+    def test_valid_post_keeps_keys_outside_schema(self):
+        data = json.loads(self.original_text)
+        data['robot']['width'] = 1.234
+        data['gps']['antenna_rotation'] = 45
+        response = self.post(data)
+        self.assertRedirects(response, reverse('system:settings'), fetch_redirect_response=False)
+        saved = self.saved()
+        self.assertEqual(saved['robot']['width'], 1.234)
+        self.assertEqual(saved['gps']['antenna_rotation'], 45)
+        # The schema fills in transform_center/head; they are not written unless posted.
+        self.assertNotIn('transform_center', saved['robot'])
+
+    def test_invalid_json_keeps_text_and_writes_nothing(self):
+        response = self.post('{"name": ')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.context['raw_json'], '{"name": ')
+        self.assertEqual(self.saved(), self.original)
+
+    def test_schema_error_writes_nothing(self):
+        data = json.loads(self.original_text)
+        data['hitches'][0]['name'] = 'XX'
+        response = self.post(data)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('hitches', response.context['error'])
+        self.assertEqual(self.saved(), self.original)

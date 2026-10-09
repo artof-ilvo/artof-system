@@ -6,10 +6,11 @@ import artof_utils.paths as paths
 from artof_utils.redis_instance import redis_server
 from artof_utils.implement import implement_manager
 from artof_utils.schemas.implement import Implement, Section
-from artof_utils.schemas.settings import HitchType, Transform
+from artof_utils.schemas.settings import HitchName, HitchType, PlatformSettings, Transform, VehicleConfig
 from pydantic import ValidationError
 
 from os import path
+import copy
 import json
 
 
@@ -19,27 +20,74 @@ def settings(request):
     return render(request, "system/settings.html")
 
 
+SETTINGS_FILES = ('settings.json', 'config.json', 'types.json')
+PLATFORM_SETTINGS_FILE = 'settings.json'
+
+
+def _render_platform_edit(request, data, error=None, status=200, raw_json=None):
+    context = {
+        'settings_data': data,
+        'raw_json': raw_json,
+        'types': [t.value for t in HitchType],
+        'hitch_names': [n.value for n in HitchName],
+        'vehicle_configs': [c.value for c in VehicleConfig],
+        'error': error,
+    }
+    return render(request, "system/platform_edit.html", context, status=status)
+
+
+def _validate_platform_settings(data):
+    """Returns an error message, or None when `data` is valid for artof_utils' PlatformSettings."""
+    if not isinstance(data, dict):
+        return "The settings must be a JSON object."
+    try:
+        # The model fills in missing keys of the dict it is given: validate a copy.
+        PlatformSettings.model_validate(copy.deepcopy(data))
+    except ValidationError as e:
+        return "Invalid settings: " + "; ".join(
+            "%s: %s" % (".".join(str(p) for p in err['loc']), err['msg']) for err in e.errors())
+    return None
+
+
 def edit_settings(request):
     if request.method == 'POST':
         filename = request.POST.get('name', '')
-        data = json.loads(request.POST.get('data', ''))
+        if filename not in SETTINGS_FILES:
+            return HttpResponse("Unknown settings file \"%s\"" % filename, status=400)
+        raw = request.POST.get('data', '')
+        if filename == PLATFORM_SETTINGS_FILE:
+            try:
+                data = json.loads(raw)
+            except ValueError as e:
+                return _render_platform_edit(request, {}, "Invalid JSON: %s" % e, 400, raw_json=raw)
+            error = _validate_platform_settings(data)
+            if error:
+                return _render_platform_edit(request, data, error, 400)
+        else:
+            data = json.loads(raw)
         filepath = path.join(paths.base, filename)
 
+        # Written as posted (not as the model dumps it), so keys outside the schema are kept.
         with open(filepath, 'w') as f:
             json.dump(data, f, indent=4)
 
         return redirect(reverse('system:settings'))
     elif request.method == 'GET':
         filename = request.GET.get('filename', '')
+        if filename not in SETTINGS_FILES:
+            return HttpResponse("Unknown settings file \"%s\"" % filename, status=404)
         filepath = path.join(paths.base, filename)
 
         context = {"Name": filename, "Json": ""}
         if path.exists(filepath):
             with open(filepath, 'r') as f:
-                context["Json"] = json.dumps(json.load(f), indent=4)
+                data = json.load(f)
         else:
             return HttpResponse("Filename \"%s\" does not exist" % filepath, status=404)
 
+        if filename == PLATFORM_SETTINGS_FILE:
+            return _render_platform_edit(request, data)
+        context["Json"] = json.dumps(data, indent=4)
         return render(request, "system/editor.html", context)
     else:
         # Handle other HTTP methods if needed

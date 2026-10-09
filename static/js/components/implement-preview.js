@@ -5,20 +5,7 @@
 // with hinge(l) = (0, -l, 0) at hitch angle 0. A section with `repeats` n becomes n copies shifted by
 // i * offset along x. Its footprint is x in ±width/2, y in [-down, up], turned by the yaw R[2].
 // Axes: +x left, +y forward, +z up; the top view is drawn with forward up and +x to the left.
-
-const SVG_NS = 'http://www.w3.org/2000/svg';
-const PX_PER_M = 100;
-const TARGET_FONT_PX = 11;
-
-const vec = (v) => [Number(v?.[0]) || 0, Number(v?.[1]) || 0, Number(v?.[2]) || 0];
-const num = (value, fallback = 0) => (Number.isFinite(Number(value)) && value !== null && value !== '' ? Number(value) : fallback);
-
-function el(name, attributes = {}, parent = null) {
-    const element = document.createElementNS(SVG_NS, name);
-    for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value);
-    parent?.append(element);
-    return element;
-}
+import { Bounds, PX_PER_M, drawScale, el, fit, num, redrawOnResize, robotCentre, vec } from '../lib/svg-drawing.js';
 
 /** Section copies as artof-core expands them, in the GPS frame. */
 export function expandSections(implement, hitch) {
@@ -54,35 +41,6 @@ function footprint(copy) {
         .map(([x, y]) => [origin[0] + x * cos - y * sin, origin[1] + x * sin + y * cos]);
 }
 
-/** A nice round length for the scale bar, about a fifth of `extent`. */
-function scaleLength(extent) {
-    const raw = extent / 5;
-    const power = 10 ** Math.floor(Math.log10(raw));
-    return [1, 2, 5, 10].map((f) => f * power).find((value) => value >= raw) ?? raw;
-}
-
-class Bounds {
-    constructor() {
-        this.minX = Infinity; this.minY = Infinity; this.maxX = -Infinity; this.maxY = -Infinity;
-    }
-    add(x, y) {
-        this.minX = Math.min(this.minX, x); this.maxX = Math.max(this.maxX, x);
-        this.minY = Math.min(this.minY, y); this.maxY = Math.max(this.maxY, y);
-    }
-    get empty() { return this.minX > this.maxX; }
-}
-
-/** Sets the SVG's viewBox around `bounds` (svg units) and returns the font size that renders at ~11 px. */
-function fit(svg, bounds, padding) {
-    const width = bounds.maxX - bounds.minX + 2 * padding;
-    const height = bounds.maxY - bounds.minY + 2 * padding;
-    svg.setAttribute('viewBox', `${bounds.minX - padding} ${bounds.minY - padding} ${width} ${height}`);
-    // The drawing is scaled to fit both the width and the CSS max-height (preserveAspectRatio meet).
-    const rect = svg.getBoundingClientRect();
-    const scale = rect.width && rect.height ? Math.min(rect.width / width, rect.height / height) : 400 / width;
-    return TARGET_FONT_PX / scale;
-}
-
 export class ImplementPreview {
     /**
      * @param {SVGSVGElement} topSvg
@@ -94,14 +52,7 @@ export class ImplementPreview {
         this.sideSvg = sideSvg;
         this.robot = platform.robot;
         this.hitches = platform.hitches ?? [];
-        // Text and strokes are sized for the rendered width: redraw when the width changes (not the
-        // height, which follows the viewBox and would otherwise loop).
-        let width = 0;
-        new ResizeObserver(([entry]) => {
-            if (Math.abs(entry.contentRect.width - width) < 1) return;
-            width = entry.contentRect.width;
-            if (this.last) this.draw(...this.last);
-        }).observe(topSvg);
+        redrawOnResize(topSvg, () => this.last && this.draw(...this.last));
     }
 
     /**
@@ -128,7 +79,7 @@ export class ImplementPreview {
         const robot = this.robot;
         let robotRect = null;
         if (robot && hitch) {
-            const [rx, ry] = vec(robot.transform?.T);
+            const [rx, ry] = robotCentre(robot);
             const w = num(robot.width);
             const l = num(robot.length);
             robotRect = { x0: rx - w / 2, x1: rx + w / 2, y0: ry - l / 2, y1: ry + l / 2 };
@@ -185,7 +136,7 @@ export class ImplementPreview {
         const hitchLabel = el('text', { class: 'ip-label', x: sx(hitchT[0]) + font * 0.8, y: sy(hitchT[1]), 'dominant-baseline': 'middle' }, svg);
         hitchLabel.textContent = hitch ? `hitch ${hitch.name}` : 'hitch ball';
 
-        this.drawScale(svg, bounds, extent, font, stroke);
+        drawScale(svg, bounds, extent, font, stroke);
     }
 
     drawSide({ hitchT, ball, copies }, hitch, activeIndex) {
@@ -200,7 +151,7 @@ export class ImplementPreview {
         const robot = this.robot;
         let body = null;
         if (robot && hitch) {
-            const [, ry, rz] = vec(robot.transform?.T);
+            const [, ry, rz] = robotCentre(robot);
             const l = num(robot.length);
             body = { y0: ry - l / 2, y1: ry + l / 2, z0: rz, z1: Math.max(0, rz + num(robot.wheel_diameter)) };
             addWorld(body.y0, body.z0);
@@ -247,26 +198,6 @@ export class ImplementPreview {
         el('circle', { class: 'ip-hitch', cx: sx(hitchT[1]), cy: sy(hitchT[2]), r: stroke * 3 }, svg);
         el('circle', { class: 'ip-ball', cx: sx(ball[1]), cy: sy(ball[2]), r: stroke * 3, 'stroke-width': stroke }, svg);
 
-        this.drawScale(svg, bounds, extent, font, stroke);
-    }
-
-    /** Scale bar under the drawing (the axis key is a caption in the template). */
-    drawScale(svg, bounds, extent, font, stroke) {
-        const metres = scaleLength(extent / PX_PER_M);
-        const length = metres * PX_PER_M;
-        // Below the section labels, which hang under the lowest footprint.
-        const x = bounds.minX;
-        const y = bounds.maxY + font * 3;
-        const tick = font * 0.4;
-        el('path', {
-            class: 'ip-axis',
-            d: `M${x},${y - tick} V${y + tick} M${x},${y} H${x + length} M${x + length},${y - tick} V${y + tick}`,
-            'stroke-width': stroke * 1.5, fill: 'none',
-        }, svg);
-        const text = el('text', { class: 'ip-label', x: x + length + font * 0.5, y, 'dominant-baseline': 'middle' }, svg);
-        text.textContent = `${metres} m`;
-
-        const [vx, vy, vw, vh] = svg.getAttribute('viewBox').split(' ').map(Number);
-        svg.setAttribute('viewBox', `${vx} ${vy} ${vw} ${vh + font * 2.5}`);
+        drawScale(svg, bounds, extent, font, stroke);
     }
 }

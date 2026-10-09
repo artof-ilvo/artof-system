@@ -1398,6 +1398,18 @@ input[type="number"] {
     fill: var(--slate-700);
 }
 
+.implement-preview .ip-hitch.is-active {
+    fill: var(--brand);
+}
+
+.implement-preview .ip-link.is-active {
+    stroke: var(--brand);
+}
+
+.implement-preview .ip-antenna {
+    fill: var(--warning);
+}
+
 .implement-preview .ip-ball {
     fill: #fff;
     stroke: var(--slate-700);
