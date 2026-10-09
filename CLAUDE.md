@@ -33,6 +33,8 @@ ILVO_PATH=/tmp/ilvo-test .venv/bin/python manage.py test app_core.test_shapefile
 
 Shapes are saved through `app_core/utils/shapefiles.py`: uploads are stored as the uploaded GeoDataFrame (attributes and projected CRS kept), and coordinate-based edits go through `preserving_attributes()`, because `artof_utils`' `Shapefile.update(coordinates)` writes geometry only. Task features carry a per-feature attribute (`TASK_ATTRIBUTES` there): `rate` (float, default 100) for continuous/cardan and `routine` (int, default 1) for discrete/intermittent. Defaults are written when a task is saved; the field-edit page edits them through `core:field_edit_task_attribute` (`static/js/pages/task-attributes.js`).
 
+`app_system/tests.py` (implement editor) also writes files and needs `ILVO_PATH` set to such a copy.
+
 `app_core/tests.py` imports `app_core.forms.task`, which no longer exists, so that test module currently fails to import. There is no linter or JS build configured.
 
 Docker: `docker build -t axelwillekens/artof-system:sqat .` and run with `--network=host -v /var/lib/ilvo:/var/lib/ilvo`. CI (`.github/workflows/ci.yml`) only builds and pushes the image (tag `dev` and version/`latest`).
@@ -41,7 +43,8 @@ Docker: `docker build -t axelwillekens/artof-system:sqat .` and run with `--netw
 
 - **`ilvo/`** – project: settings, `urls.py` (`/core/` → `app_core`, `/system/` → `app_system`, `/` redirects to the field page), `routing.py` + `consumers.py` for websockets, `filters.py` (`split` template filter, loaded as `filters`).
 - **`app_core`** – operator app (namespace `core`): field list/edit, map page, settings. Views are function-based and call `robot_manager` / `Field`; many actions are GET links that do the change and redirect or re-render a full page.
-- **`app_system`** – admin (namespace `system`): JSON editor for settings/processes/addons/implements (`templates/system/editor.html`), Redis variable monitor.
+- **`app_system`** – admin (namespace `system`): JSON editor for settings/processes/addons (`templates/system/editor.html`, `static/js/components/json-editor.js`), Redis variable monitor.
+  - Implements have their own editor (`system:implement_edit`, `templates/system/implement_edit.html`, `static/js/pages/implement-editor.js`): a form or JSON mode (toggle, remembered in localStorage) on one implement object, posted as JSON in `data` and validated server-side with `artof_utils`' `Implement` (bad JSON/schema/name re-renders with the error; renames remove the old file). `static/js/components/implement-preview.js` draws a top and side view in the `settings.json` GPS frame, computed as artof-core does: hitch T → hitch link_length → section link_length → section T, `repeats` copies shifted `i·offset` along x, footprint `±width/2` × `[-down, up]`. Axes: +x left, +y forward, +z up.
 - **Websockets** (`ilvo/consumers.py`): `CustomConsumer` pushes `get_data()` every 200 ms to each client. `/ws/status/` → `robot_manager.status()` (status bar + notifications), `/ws/robot/` → `robot_manager.context()` (robot pose, hitches, implements, controller info; also receives `{command, value}` drive commands), `/ws/redis/` → all Redis variables (monitor page).
 - **Static files** are served by the ASGI app itself (`ilvo/asgi.py` wraps Django in `ASGIStaticFilesHandler`, also with `DEBUG=0`, adding `Cache-Control: no-cache`), so there is no collectstatic step or separate web server.
 

@@ -1346,6 +1346,99 @@ input[type="number"] {
     outline: none;
 }
 
+/* ------------------------------------------------- Implement preview */
+@media (min-width: 992px) {
+    .implement-preview-card {
+        position: sticky;
+        top: calc(var(--nav-height) + 1rem);
+    }
+}
+
+.implement-preview {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 26rem;
+    background: var(--slate-50);
+    border: 1px solid var(--slate-200);
+    border-radius: var(--bs-border-radius-sm);
+}
+
+.implement-preview-side {
+    max-height: 14rem;
+}
+
+.implement-preview .ip-label {
+    font-size: var(--ip-font);
+    fill: var(--slate-500);
+}
+
+.implement-preview .ip-label-strong {
+    fill: var(--slate-900);
+    font-weight: 600;
+}
+
+.implement-preview .ip-robot {
+    fill: #fff;
+    stroke: var(--slate-300);
+}
+
+.implement-preview .ip-link {
+    stroke: var(--slate-500);
+    stroke-linecap: round;
+}
+
+.implement-preview .ip-link-thin {
+    stroke: var(--slate-300);
+    stroke-dasharray: 4 3;
+    vector-effect: non-scaling-stroke;
+}
+
+.implement-preview .ip-hitch {
+    fill: var(--slate-700);
+}
+
+.implement-preview .ip-ball {
+    fill: #fff;
+    stroke: var(--slate-700);
+}
+
+.implement-preview .ip-section {
+    fill: rgba(var(--brand-rgb), .22);
+    stroke: var(--brand);
+}
+
+.implement-preview .ip-section.is-active {
+    fill: rgba(var(--brand-rgb), .5);
+    stroke: var(--brand-hover);
+}
+
+.implement-preview .ip-section.is-invalid {
+    fill: var(--danger-subtle);
+    stroke: var(--danger);
+}
+
+.implement-preview .ip-footprint {
+    stroke: rgba(var(--brand-rgb), .45);
+}
+
+.implement-preview .ip-footprint.is-active {
+    stroke: var(--brand);
+}
+
+.implement-preview .ip-origin {
+    fill: var(--brand-text);
+}
+
+.implement-preview .ip-axis {
+    stroke: var(--slate-500);
+}
+
+.implement-preview-key {
+    font-size: .75rem;
+    color: var(--slate-500);
+}
+
 /* ------------------------------------------------------------- Monitor */
 .monitor-value {
     font-family: var(--bs-font-monospace);
