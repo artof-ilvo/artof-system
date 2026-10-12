@@ -1,0 +1,239 @@
+{% extends "system/base.html" %}
+{% load static %}
+{% block title %}{% if original_name %}{{ original_name }}{% else %}New addon{% endif %}{% endblock %}
+{% block content %}
+
+<form method="POST" action="{% url 'system:edit_addon' %}" id="addon-form" data-busy>
+  {% csrf_token %}
+  <input type="hidden" name="original_name" value="{{ original_name }}">
+  <input type="hidden" name="data" id="addon-data">
+
+  <div class="card mb-3">
+    <div class="card-header d-flex flex-wrap align-items-center gap-2">
+      <a class="btn btn-ghost btn-icon" href="{% url 'system:addon' %}" title="Back to addons" aria-label="Back to addons">
+        {% include "icons/arrow-left-short.html" %}
+      </a>
+      <h1 class="h5 m-0 flex-grow-1 text-truncate" id="addon-title">{% if original_name %}{{ original_name }}{% else %}New addon{% endif %}</h1>
+      <div class="segmented" role="group" aria-label="Editor mode">
+        <input type="radio" class="btn-check" name="editor-mode" value="form" id="editor-mode-form" autocomplete="off" checked>
+        <label class="btn" for="editor-mode-form">{% include "icons/sliders.html" %} Form</label>
+        <input type="radio" class="btn-check" name="editor-mode" value="json" id="editor-mode-json" autocomplete="off">
+        <label class="btn" for="editor-mode-json">{% include "icons/json.html" %} JSON</label>
+      </div>
+      <button id="format-button" type="button" class="btn btn-outline-secondary" hidden>{% include "icons/json.html" %} Format</button>
+      <button type="submit" class="btn btn-primary">{% include "icons/box-arrow-in-up.html" %} Save</button>
+    </div>
+  </div>
+
+  {% if error %}
+  <div class="alert alert-danger d-flex gap-2 align-items-start" role="alert">
+    {% include "icons/exclamation-triangle-fill.html" %}<span>{{ error }}</span>
+  </div>
+  {% endif %}
+  {% if original_name %}
+  <div class="alert alert-warning small py-2" role="note">
+    The system manager keeps the configuration it started with. To apply changes to this addon: restart the system manager, then press <strong>Update</strong> (↻) on the Addons page to recreate the container.
+  </div>
+  {% endif %}
+
+  <div class="row g-3">
+    <div class="col-lg-7">
+      {# ------------------------------------------------------------ Form mode #}
+      <div id="form-pane" class="stack">
+        <div class="card">
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-sm-6">
+                <label class="field-label" for="addon-name">Name</label>
+                <input type="text" class="form-control" id="addon-name" required autocomplete="off" placeholder="e.g. taskmap" {% if original_name %}readonly{% endif %}>
+                <div class="form-text">Also the Docker container name. Letters, digits, <code>_ . -</code>.{% if original_name %} Cannot be changed: delete the addon and add it again.{% endif %}</div>
+              </div>
+              <div class="col-sm-6 d-flex align-items-start pt-sm-4">
+                <div class="form-check form-switch m-0">
+                  <input class="form-check-input" type="checkbox" role="switch" id="addon-autostart"{% if addon_data.AutoStart is not False %} checked{% endif %}>
+                  <label class="form-check-label" for="addon-autostart">Start with the robot</label>
+                  <div class="form-text">Started when the system manager starts (AutoStart).</div>
+                </div>
+              </div>
+              <div class="col-12">
+                <label class="field-label" for="addon-image">Docker image</label>
+                <input type="text" class="form-control font-monospace" id="addon-image" required autocomplete="off" placeholder="axelwillekens/artof-taskmap-addon:dev">
+                <div class="form-text">Repository and tag (<code>name:tag</code>; without a tag Docker uses <code>latest</code>). An image that is not on the robot is pulled from the registry. The image must exist: an image that cannot be found makes the system manager crash when it starts the addon.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header fw-semibold">Folders shared with the container</div>
+          <div class="card-body">
+            <div class="form-text mt-0 mb-2">Each folder or file on the robot (host) appears inside the container at the container path. ARTOF addons usually need <code>/var/lib/ilvo:/var/lib/ilvo</code> for fields, implements and settings.</div>
+            <div id="binds" class="stack"></div>
+            <button type="button" class="btn btn-outline-secondary btn-sm mt-2" id="add-bind">{% include "icons/plus.html" %} Add folder</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header fw-semibold">Environment variables</div>
+          <div class="card-body">
+            <div class="form-text mt-0 mb-2">Settings passed to the program in the container, e.g. <code>TASKMAP_MIN_DISTANCE</code> for the taskmap addon. See the addon's README.</div>
+            <div id="env" class="stack"></div>
+            <button type="button" class="btn btn-outline-secondary btn-sm mt-2" id="add-env">{% include "icons/plus.html" %} Add variable</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header fw-semibold">Network and restarts</div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-sm-4">
+                <label class="field-label" for="addon-network">Network</label>
+                <select class="form-select" id="addon-network">
+                  <option value="host">host</option>
+                  <option value="bridge">bridge</option>
+                  <option value="none">none</option>
+                </select>
+                <div class="form-text"><strong>host</strong> shares the robot's network, so the addon reaches Redis on <code>127.0.0.1</code>. Use it for ARTOF addons.</div>
+              </div>
+              <div class="col-sm-4">
+                <label class="field-label" for="addon-restart">Restart policy</label>
+                <select class="form-select" id="addon-restart">
+                  <option value="no">no</option>
+                  <option value="on-failure">on-failure</option>
+                  <option value="always">always</option>
+                  <option value="unless-stopped">unless-stopped</option>
+                </select>
+                <div class="form-text">What Docker does when the program in the container stops.</div>
+              </div>
+              <div class="col-sm-4" id="addon-retries-field">
+                <label class="field-label" for="addon-retries">Max. retries</label>
+                <input type="number" class="form-control" id="addon-retries" min="0" step="1">
+                <div class="form-text">How often Docker restarts it after a crash (on-failure).</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header fw-semibold">Registry</div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="field-label" for="addon-registry">Server address</label>
+                <input type="text" class="form-control font-monospace" id="addon-registry" autocomplete="off" placeholder="https://registry.hub.docker.com/v2/">
+                <div class="form-text">Where Update and missing images are pulled from. Docker Hub: <code>https://registry.hub.docker.com/v2/</code>.</div>
+              </div>
+              <div class="col-sm-6">
+                <label class="field-label" for="addon-username">User name</label>
+                <input type="text" class="form-control" id="addon-username" autocomplete="off">
+              </div>
+              <div class="col-sm-6">
+                <label class="field-label" for="addon-password">Password or token</label>
+                <input type="password" class="form-control" id="addon-password" autocomplete="new-password">
+              </div>
+              <div class="col-12 form-text mt-1">Only for private images. Leave both empty for public images: an empty login is still sent to the registry.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section m-0">
+          <button type="button" class="section-toggle" data-bs-toggle="collapse" data-bs-target="#addon-guide" aria-controls="addon-guide" aria-expanded="false">
+            How the system manager runs addons
+            <span class="chevron">{% include "icons/chevron-down.html" %}</span>
+          </button>
+          <div class="collapse" id="addon-guide">
+            <div class="section-body small">
+              <p>Addons are Docker containers managed by <code>ilvo-system-manager</code> through the Redis key <code>system</code>.</p>
+              <ul class="ps-3">
+                <li><strong>Start</strong> reuses a container with this name and image, or creates one from this configuration (pulling the image when it is not on the robot), then starts it.</li>
+                <li><strong>Stop</strong> stops the container; it is kept.</li>
+                <li><strong>Update</strong> (↻) stops the container, pulls the image, deletes the container and creates a new one. A locally built image is replaced when the registry has an image with the same name and tag.</li>
+                <li>Configuration changes are only used after the system manager restarts, and only for a new container: restart the manager, then Update.</li>
+              </ul>
+              <p class="mb-0">A wrong image name, or a container with this name that was made from another image, makes the current system manager crash on Start. The form refuses an empty image; check the name and tag before saving.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# ------------------------------------------------------------ JSON mode #}
+      <div class="card" id="json-pane" hidden>
+        <div class="code-editor">
+          <div class="code-gutter" id="line-numbers-container">
+            <div id="line-numbers"></div>
+          </div>
+          <textarea id="json-editor" spellcheck="false" aria-label="Addon JSON"></textarea>
+        </div>
+      </div>
+    </div>
+
+    {# ------------------------------------------------------------ Preview #}
+    <div class="col-lg-5">
+      <div class="implement-preview-card stack">
+        {% if status_info %}
+        <div class="card">
+          <div class="card-header d-flex align-items-center gap-2">
+            <span class="fw-semibold flex-grow-1">Status</span>
+            <span class="status-badge {% if status_info.running %}status-running{% else %}status-stopped{% endif %}">{% if status_info.running %}Running{% else %}Stopped{% endif %}</span>
+          </div>
+          <div class="card-body small">
+            <dl class="addon-status m-0">
+              <dt>Container</dt><dd class="font-monospace">{{ status_info.container|default:"–" }}</dd>
+              <dt>Started</dt><dd>{{ status_info.started|default:"–" }}</dd>
+              {% if status_info.exit_code is not None and status_info.exit_code != -1 %}<dt>Exit code</dt><dd>{{ status_info.exit_code }}</dd>{% endif %}
+              {% if status_info.error %}<dt>Error</dt><dd class="text-danger">{{ status_info.error }}</dd>{% endif %}
+            </dl>
+          </div>
+        </div>
+        {% endif %}
+        <div class="card">
+          <div class="card-header fw-semibold">Container</div>
+          <div class="card-body">
+            <div class="addon-diagram" id="addon-diagram"></div>
+            <div class="field-label mt-3">Equivalent command</div>
+            <pre class="addon-command" id="addon-command"></pre>
+            <div class="form-text mb-0">What the system manager does on Start, as a <code>docker run</code> you can try in a terminal first.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</form>
+
+<template id="bind-template">
+  <div class="d-flex gap-2 align-items-end" data-row>
+    <div class="flex-grow-1">
+      <label class="field-label">On the robot</label>
+      <input type="text" class="form-control font-monospace" data-field="host" autocomplete="off" placeholder="/var/lib/ilvo">
+    </div>
+    <div class="flex-grow-1">
+      <label class="field-label">In the container</label>
+      <input type="text" class="form-control font-monospace" data-field="container" autocomplete="off" placeholder="/var/lib/ilvo">
+    </div>
+    <div class="form-check mb-2">
+      <input class="form-check-input" type="checkbox" data-field="readonly">
+      <label class="form-check-label small">read-only</label>
+    </div>
+    <button type="button" class="btn btn-ghost text-danger btn-icon" data-remove title="Remove" aria-label="Remove">{% include "icons/trash.html" %}</button>
+  </div>
+</template>
+
+<template id="env-template">
+  <div class="d-flex gap-2 align-items-end" data-row>
+    <div class="flex-grow-1">
+      <label class="field-label">Name</label>
+      <input type="text" class="form-control font-monospace" data-field="name" autocomplete="off" placeholder="TASKMAP_MIN_DISTANCE">
+    </div>
+    <div class="flex-grow-1">
+      <label class="field-label">Value</label>
+      <input type="text" class="form-control font-monospace" data-field="value" autocomplete="off" placeholder="0.1">
+    </div>
+    <button type="button" class="btn btn-ghost text-danger btn-icon" data-remove title="Remove" aria-label="Remove">{% include "icons/trash.html" %}</button>
+  </div>
+</template>
+
+{{ addon_data|json_script:"addon_data" }}
+{{ raw_json|json_script:"raw_json" }}
+<script type="module" src="{% static 'js/pages/addon-editor.js' %}"></script>
+
+{% endblock %}

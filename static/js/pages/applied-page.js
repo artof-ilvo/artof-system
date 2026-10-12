@@ -10,6 +10,10 @@ import { RateColors, sessionLabel } from './map/as-applied-panel.js';
 const DEFAULT_COLOR = { sections: 'rate', points: '' };
 // Wait this long after the last filter edit before reloading the features.
 const RELOAD_DELAY_MS = 350;
+// Remembered per browser: whether the traject is drawn over the as-applied map.
+const SHOW_TRAJECT_KEY = 'applied-show-traject';
+// At most this many matching attributes are listed in the filter search.
+const MAX_FILTER_OPTIONS = 200;
 
 const escapeHTML = (text) => String(text).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -138,6 +142,113 @@ class FilterRow {
     }
 }
 
+/** Search field with a list of attributes; picking one (click or Enter) adds a filter on it. */
+class FilterPicker {
+    constructor(input, list, onPick) {
+        this.input = input;
+        this.list = list;
+        this.onPick = onPick;
+        this.names = [];
+        this.taken = new Set();
+        this.active = -1;
+
+        input.addEventListener('focus', () => this.open());
+        input.addEventListener('input', () => this.open());
+        input.addEventListener('blur', () => this.close());
+        input.addEventListener('keydown', (event) => this.keydown(event));
+        // mousedown, not click: picking must happen before the input loses focus and closes the list.
+        list.addEventListener('mousedown', (event) => {
+            const option = event.target.closest('[data-name]');
+            if (!option) return;
+            event.preventDefault();
+            this.pick(option.dataset.name);
+        });
+    }
+
+    /** All attributes of the layer, and the ones that already have a filter. */
+    setNames(names, taken = []) {
+        this.names = names;
+        this.taken = new Set(taken);
+        if (!this.list.hidden) this.render();
+    }
+
+    get options() {
+        return [...this.list.querySelectorAll('[data-name]')];
+    }
+
+    open() {
+        this.render();
+        this.list.hidden = false;
+        this.input.setAttribute('aria-expanded', 'true');
+    }
+
+    close() {
+        this.list.hidden = true;
+        this.input.setAttribute('aria-expanded', 'false');
+        this.active = -1;
+    }
+
+    render() {
+        const query = this.input.value.trim().toLowerCase();
+        const matches = this.names.filter((name) => !this.taken.has(name) && name.toLowerCase().includes(query));
+        this.list.replaceChildren(...matches.slice(0, MAX_FILTER_OPTIONS).map((name, index) => {
+            const option = document.createElement('div');
+            option.className = 'applied-filter-option';
+            option.id = `applied-filter-option-${index}`;
+            option.role = 'option';
+            option.dataset.name = name;
+            option.textContent = name;
+            return option;
+        }));
+        if (!matches.length) {
+            const empty = document.createElement('div');
+            empty.className = 'applied-filter-empty';
+            empty.textContent = this.names.length ? 'No attributes match.' : 'No attributes.';
+            this.list.append(empty);
+        } else if (matches.length > MAX_FILTER_OPTIONS) {
+            const more = document.createElement('div');
+            more.className = 'applied-filter-empty';
+            more.textContent = `${matches.length - MAX_FILTER_OPTIONS} more: type to narrow down.`;
+            this.list.append(more);
+        }
+        this.setActive(query && matches.length ? 0 : -1);
+    }
+
+    setActive(index) {
+        const options = this.options;
+        this.active = options.length ? Math.max(-1, Math.min(index, options.length - 1)) : -1;
+        options.forEach((option, i) => option.classList.toggle('is-active', i === this.active));
+        const active = options[this.active];
+        if (active) {
+            active.scrollIntoView({ block: 'nearest' });
+            this.input.setAttribute('aria-activedescendant', active.id);
+        } else {
+            this.input.removeAttribute('aria-activedescendant');
+        }
+    }
+
+    keydown(event) {
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            if (this.list.hidden) this.open();
+            this.setActive(this.active + (event.key === 'ArrowDown' ? 1 : -1));
+        } else if (event.key === 'Enter') {
+            event.preventDefault();
+            const option = this.options[this.active];
+            if (option) this.pick(option.dataset.name);
+        } else if (event.key === 'Escape') {
+            this.close();
+        }
+    }
+
+    pick(name) {
+        this.input.value = '';
+        this.close();
+        this.input.blur();
+        this.onPick(name);
+    }
+}
+
 class AppliedPage {
     constructor() {
         this.root = byId('applied-layout');
@@ -166,7 +277,7 @@ class AppliedPage {
             option.textContent = sessionLabel(option.value) + (option.textContent.includes('(recording)') ? ' (recording)' : '');
         }
         this.colorSelect = byId('applied-color');
-        this.addFilterSelect = byId('applied-add-filter');
+        this.filterPicker = new FilterPicker(byId('applied-filter-search'), byId('applied-filter-options'), (name) => this.addFilter(name));
         /** @type {FilterRow[]} */
         this.filters = [];
         this.columns = {};
@@ -177,7 +288,6 @@ class AppliedPage {
             radio.addEventListener('change', () => this.selectLayer());
         }
         this.colorSelect.addEventListener('change', () => this.selectColor(this.colorSelect.value));
-        this.addFilterSelect.addEventListener('change', () => this.addFilter(this.addFilterSelect.value));
 
         this.selectSession(true);
     }
@@ -189,7 +299,24 @@ class AppliedPage {
         for (const task of Object.values(tasks)) {
             if (!task.geometry.empty) drawTask(group, task.type, task.geometry.latlng, { filled: false });
         }
-        if (!traject.empty) drawTraject(group, traject.latlng[0]);
+        if (!traject.empty) this.drawTrajectToggle(traject.latlng[0]);
+    }
+
+    /** The traject in its own layer, shown or hidden with the "Show traject" switch. */
+    drawTrajectToggle(latlngs) {
+        const trajectGroup = L.layerGroup();
+        drawTraject(trajectGroup, latlngs);
+        const toggle = byId('applied-show-traject');
+        let show = true;
+        try { show = localStorage.getItem(SHOW_TRAJECT_KEY) !== 'false'; } catch { /* storage unavailable */ }
+        toggle.checked = show;
+        if (show) trajectGroup.addTo(this.map);
+        byId('applied-traject-toggle').hidden = false;
+        toggle.addEventListener('change', () => {
+            if (toggle.checked) trajectGroup.addTo(this.map);
+            else trajectGroup.remove();
+            try { localStorage.setItem(SHOW_TRAJECT_KEY, String(toggle.checked)); } catch { /* storage unavailable */ }
+        });
     }
 
     get session() {
@@ -237,9 +364,8 @@ class AppliedPage {
             return;
         }
         const names = Object.keys(this.columns).sort((a, b) => a.localeCompare(b));
-        const options = (placeholder) => [placeholder, ...names.map((name) => new Option(name, name))];
-        this.colorSelect.replaceChildren(...options(new Option('One colour', '')));
-        this.addFilterSelect.replaceChildren(...options(new Option('+ Add filter on…', '')));
+        this.colorSelect.replaceChildren(new Option('One colour', ''), ...names.map((name) => new Option(name, name)));
+        this.filterPicker.setNames(names);
 
         const color = DEFAULT_COLOR[this.layerName];
         await this.selectColor(color in this.columns ? color : '', { fit });
@@ -261,20 +387,26 @@ class AppliedPage {
     }
 
     async addFilter(name) {
-        this.addFilterSelect.value = '';
         if (!name || this.filters.some((row) => row.summary.name === name)) return;
         try {
             const summary = await this.getJSON('attributeUrl', { name });
             const row = new FilterRow(summary, () => this.scheduleReload(), () => {
                 this.filters = this.filters.filter((other) => other !== row);
                 row.element.remove();
+                this.updateFilterPicker();
                 this.reload();
             });
             this.filters.push(row);
             byId('applied-filters').append(row.element);
+            this.updateFilterPicker();
         } catch (error) {
             showError('Adding the filter', error);
         }
+    }
+
+    /** Attributes that already have a filter are left out of the search. */
+    updateFilterPicker() {
+        this.filterPicker.setNames(this.filterPicker.names, this.filters.map((row) => row.summary.name));
     }
 
     scheduleReload() {

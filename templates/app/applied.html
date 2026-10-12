@@ -23,6 +23,11 @@
                 </select>
             </form>
 
+            <div class="form-check form-switch mb-3" id="applied-traject-toggle" hidden>
+                <input class="form-check-input" type="checkbox" role="switch" id="applied-show-traject" checked>
+                <label class="form-check-label" for="applied-show-traject">Show traject</label>
+            </div>
+
             {% if sessions %}
                 <label class="field-label d-block" for="applied-session">Recording</label>
                 <select class="form-select" id="applied-session">
@@ -53,9 +58,11 @@
                     <span class="small text-body-secondary" id="applied-count"></span>
                 </div>
                 <div class="applied-filters" id="applied-filters"></div>
-                <select class="form-select form-select-sm mt-2" id="applied-add-filter" aria-label="Add a filter">
-                    <option value="">+ Add filter on…</option>
-                </select>
+                <div class="applied-filter-picker mt-2">
+                    <input type="search" class="form-control form-control-sm" id="applied-filter-search" placeholder="+ Add filter: search attributes…"
+                           autocomplete="off" role="combobox" aria-label="Add a filter" aria-autocomplete="list" aria-controls="applied-filter-options" aria-expanded="false">
+                    <div class="applied-filter-options" id="applied-filter-options" role="listbox" hidden></div>
+                </div>
             {% else %}
                 <p class="mode-info m-0">No as-applied recordings for this field yet. Start one with the record button on the map page.</p>
             {% endif %}

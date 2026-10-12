@@ -1,4 +1,4 @@
-artof_utils>=0.0.3
+artof_utils>=0.0.4
 django>=5.0
 daphne
 channels

@@ -1,0 +1,202 @@
+{% extends "system/base.html" %}
+{% load static %}
+{% block title %}{% if original_name %}{{ original_name }}{% else %}New implement{% endif %}{% endblock %}
+{% block content %}
+
+<form method="POST" action="{% url 'system:implement_edit' %}" id="implement-form" data-busy>
+  {% csrf_token %}
+  <input type="hidden" name="original_name" value="{{ original_name }}">
+  <input type="hidden" name="data" id="implement-data">
+
+  <div class="card mb-3">
+    <div class="card-header d-flex flex-wrap align-items-center gap-2">
+      <a class="btn btn-ghost btn-icon" href="{% url 'system:implement' %}" title="Back to implements" aria-label="Back to implements">
+        {% include "icons/arrow-left-short.html" %}
+      </a>
+      <h1 class="h5 m-0 flex-grow-1 text-truncate" id="implement-title">{% if original_name %}{{ original_name }}{% else %}New implement{% endif %}</h1>
+      <div class="segmented" role="group" aria-label="Editor mode">
+        <input type="radio" class="btn-check" name="editor-mode" value="form" id="editor-mode-form" autocomplete="off" checked>
+        <label class="btn" for="editor-mode-form">{% include "icons/sliders.html" %} Form</label>
+        <input type="radio" class="btn-check" name="editor-mode" value="json" id="editor-mode-json" autocomplete="off">
+        <label class="btn" for="editor-mode-json">{% include "icons/json.html" %} JSON</label>
+      </div>
+      <button id="format-button" type="button" class="btn btn-outline-secondary" hidden>{% include "icons/json.html" %} Format</button>
+      <button type="submit" class="btn btn-primary">{% include "icons/box-arrow-in-up.html" %} Save</button>
+    </div>
+  </div>
+
+  {% if error %}
+  <div class="alert alert-danger d-flex gap-2 align-items-start" role="alert">
+    {% include "icons/exclamation-triangle-fill.html" %}<span>{{ error }}</span>
+  </div>
+  {% endif %}
+
+  <div class="row g-3">
+    <div class="col-lg-7">
+      {# ------------------------------------------------------------ Form mode #}
+      <div id="form-pane">
+        <div class="card mb-3">
+          <div class="card-body stack">
+            <div>
+              <label class="field-label" for="implement-name">Name</label>
+              <input type="text" class="form-control" id="implement-name" data-field="name" required autocomplete="off" placeholder="e.g. spray-boom">
+              <div class="form-text">Saved as <code>implement/&lt;name&gt;.json</code>; this is the name you pick when attaching the implement to a hitch. No slashes.</div>
+            </div>
+            <div>
+              <span class="field-label d-block">Task types</span>
+              <div class="d-flex flex-wrap gap-3" id="implement-types">
+                {% for type in types %}
+                <div class="form-check m-0">
+                  <input class="form-check-input" type="checkbox" value="{{ type }}" id="type-{{ type }}">
+                  <label class="form-check-label" for="type-{{ type }}">{{ type }}</label>
+                </div>
+                {% endfor %}
+              </div>
+              <div class="form-text">Which kinds of task this implement can do. A hitch only accepts the implement when it supports at least one of these types.
+                <strong>continuous</strong>/<strong>cardan</strong>: a rate along the path · <strong>intermittent</strong>: on/off along the path · <strong>discrete</strong>: actions at points · <strong>hitch</strong>: only lift and lower.</div>
+            </div>
+            <div class="form-check form-switch m-0">
+              <input class="form-check-input" type="checkbox" role="switch" id="implement-on-taskmap"{% if implement_data.on_taskmap is not False %} checked{% endif %}>
+              <label class="form-check-label" for="implement-on-taskmap">Follow the task map</label>
+              <div class="form-text">On: the robot switches each section from the task-map rate under its footprint. Off: sections follow the manual <code>activate_sections</code> variables.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h2 class="h6 m-0">Sections</h2>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="add-section">{% include "icons/plus.html" %} Add section</button>
+        </div>
+        <div id="sections" class="stack"></div>
+        <p class="text-body-secondary small mt-2" id="sections-empty" hidden>No sections yet. An implement needs at least one section to work on the task map.</p>
+
+        <div class="section mt-3">
+          <button type="button" class="section-toggle" data-bs-toggle="collapse" data-bs-target="#implement-guide" aria-controls="implement-guide" aria-expanded="false">
+            How implements are defined
+            <span class="chevron">{% include "icons/chevron-down.html" %}</span>
+          </button>
+          <div class="collapse" id="implement-guide">
+            <div class="section-body small">
+              <p>An implement is a list of <strong>sections</strong>, the parts that are switched on and off (or given a rate) independently, such as nozzles, burners or a probe.</p>
+              <p><strong>Where a section sits.</strong> Each section is positioned relative to the <strong>hitch ball</strong>: the end of the hitch's lifting arm (hitch position from <code>settings.json</code>, moved back by the hitch's link length). From there an optional section <em>link length</em> moves it further back, and then the section transform <code>T</code> moves it to its origin.</p>
+              <p><strong>Axes</strong> (metres, seen from above): <strong>+x is right</strong>, <strong>+y is forward</strong> (driving direction), <strong>+z is up</strong>. A section at <code>y = -1</code> works 1 m behind the hitch ball.</p>
+              <p><strong>Footprint.</strong> Around its origin a section covers a rectangle <em>width</em> wide (centred on x), reaching <em>up</em> in front and <em>down</em> behind. The robot checks this rectangle against the task map to decide the section's rate, and the as-applied map records it.</p>
+              <p class="mb-0"><strong>Repeats.</strong> A boom of identical nozzles is a single section with <em>repeats</em> = number of nozzles and <em>offset</em> = spacing. Copy <em>i</em> is shifted <em>i × offset</em> along +x and named <code>&lt;id&gt;0</code>, <code>&lt;id&gt;1</code>, … So put <code>T.x</code> at the leftmost copy (the most negative x).</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# ------------------------------------------------------------ JSON mode #}
+      <div class="card" id="json-pane" hidden>
+        <div class="code-editor">
+          <div class="code-gutter" id="line-numbers-container">
+            <div id="line-numbers"></div>
+          </div>
+          <textarea id="json-editor" spellcheck="false" aria-label="Implement JSON"></textarea>
+        </div>
+      </div>
+    </div>
+
+    {# ------------------------------------------------------------ Preview #}
+    <div class="col-lg-5">
+      <div class="card implement-preview-card">
+        <div class="card-header d-flex align-items-center gap-2">
+          <span class="fw-semibold flex-grow-1">Preview</span>
+          <label class="visually-hidden" for="preview-hitch">Hitch</label>
+          <select class="form-select form-select-sm w-auto" id="preview-hitch" title="Hitch the implement is drawn on"></select>
+        </div>
+        <div class="card-body">
+          <div class="field-label">Top view</div>
+          <svg class="implement-preview" id="preview-top" role="img" aria-label="Implement seen from above"></svg>
+          <div class="implement-preview-key mt-1">↑ forward (+y) · → right (+x) · seen from above</div>
+          <div class="field-label mt-3">Side view <span class="text-body-secondary fw-normal">(from the left-hand side)</span></div>
+          <svg class="implement-preview implement-preview-side" id="preview-side" role="img" aria-label="Implement seen from the side"></svg>
+          <div class="implement-preview-key mt-1">← forward (+y) · ↑ up (+z)</div>
+          <p class="form-text mb-0" id="preview-note"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</form>
+
+{# One section in form mode; cloned by implement-editor.js. #}
+<template id="section-template">
+  <div class="section" data-section>
+    <div class="d-flex gap-2 align-items-center">
+      <button type="button" class="section-toggle" data-bs-toggle="collapse" aria-expanded="true">
+        <span data-section-title></span>
+        <span class="text-body-secondary fw-normal small" data-section-summary></span>
+        <span class="chevron">{% include "icons/chevron-down.html" %}</span>
+      </button>
+      <button type="button" class="btn btn-ghost btn-icon" data-action="duplicate" title="Duplicate section" aria-label="Duplicate section">{% include "icons/copy.html" %}</button>
+      <button type="button" class="btn btn-ghost text-danger btn-icon" data-action="remove" title="Remove section" aria-label="Remove section">{% include "icons/trash.html" %}</button>
+    </div>
+    <div class="collapse show" data-section-body>
+      <div class="section-body">
+        <div class="row g-3">
+          <div class="col-sm-4">
+            <label class="field-label">Id</label>
+            <input type="text" class="form-control" data-key="id" autocomplete="off">
+            <div class="form-text">Short label, e.g. L, R or N. Copies from repeats get 0, 1, … appended.</div>
+          </div>
+          <div class="col-sm-4">
+            <label class="field-label">Width (m)</label>
+            <input type="number" class="form-control" data-key="width" step="0.001" min="0" required>
+            <div class="form-text">Working width across the driving direction. Must be &gt; 0.</div>
+          </div>
+          <div class="col-sm-4">
+            <label class="field-label">Link length (m)</label>
+            <input type="number" class="form-control" data-key="link_length" step="0.001" min="0" placeholder="none">
+            <div class="form-text">Optional parallel link that hangs the section further back from the hitch ball.</div>
+          </div>
+          <div class="col-sm-6">
+            <label class="field-label">Up (m)</label>
+            <input type="number" class="form-control" data-key="up" step="0.001" min="0">
+            <div class="form-text">How far the footprint reaches <strong>in front of</strong> the section origin.</div>
+          </div>
+          <div class="col-sm-6">
+            <label class="field-label">Down (m)</label>
+            <input type="number" class="form-control" data-key="down" step="0.001" min="0">
+            <div class="form-text">How far the footprint reaches <strong>behind</strong> the origin. Up + down is the footprint length checked against the task map.</div>
+          </div>
+          <div class="col-sm-6">
+            <label class="field-label">Repeats</label>
+            <input type="number" class="form-control" data-key="repeats" step="1" min="1" placeholder="1">
+            <div class="form-text">Number of identical copies side by side (e.g. nozzles on a boom).</div>
+          </div>
+          <div class="col-sm-6">
+            <label class="field-label">Offset (m)</label>
+            <input type="number" class="form-control" data-key="offset" step="0.001" placeholder="0">
+            <div class="form-text">Spacing between copies along +x (to the right). Equal to the width for a boom without gaps.</div>
+          </div>
+          <div class="col-12">
+            <span class="field-label d-block">Position T relative to hitch ball (m)</span>
+            <div class="input-group">
+              <span class="input-group-text">x</span><input type="number" class="form-control" data-key="T.0" step="0.001" aria-label="T x">
+              <span class="input-group-text">y</span><input type="number" class="form-control" data-key="T.1" step="0.001" aria-label="T y">
+              <span class="input-group-text">z</span><input type="number" class="form-control" data-key="T.2" step="0.001" aria-label="T z">
+            </div>
+            <div class="form-text">+x right, +y forward, +z up. Negative y is behind the hitch ball, negative z below it.</div>
+          </div>
+          <div class="col-12">
+            <span class="field-label d-block">Rotation R (degrees)</span>
+            <div class="input-group">
+              <span class="input-group-text">roll</span><input type="number" class="form-control" data-key="R.0" step="1" aria-label="R roll">
+              <span class="input-group-text">pitch</span><input type="number" class="form-control" data-key="R.1" step="1" aria-label="R pitch">
+              <span class="input-group-text">yaw</span><input type="number" class="form-control" data-key="R.2" step="1" aria-label="R yaw">
+            </div>
+            <div class="form-text">Usually all 0. Yaw turns the footprint around its origin (seen from above).</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+{{ implement_data|json_script:"implement_data" }}
+{{ platform_data|json_script:"platform_data" }}
+{{ raw_json|json_script:"raw_json" }}
+<script type="module" src="{% static 'js/pages/implement-editor.js' %}"></script>
+
+{% endblock %}

@@ -1,0 +1,368 @@
+{% extends "system/base.html" %}
+{% load static %}
+{% block title %}System settings{% endblock %}
+{% block content %}
+
+<form method="POST" action="{% url 'system:edit_settings' %}" id="platform-form" data-busy>
+  {% csrf_token %}
+  <input type="hidden" name="name" value="settings.json">
+  <input type="hidden" name="data" id="platform-data">
+
+  <div class="card mb-3">
+    <div class="card-header d-flex flex-wrap align-items-center gap-2">
+      <a class="btn btn-ghost btn-icon" href="{% url 'system:settings' %}" title="Back to settings" aria-label="Back to settings">
+        {% include "icons/arrow-left-short.html" %}
+      </a>
+      <div class="flex-grow-1" style="min-width: 0">
+        <h1 class="h5 m-0 text-truncate">System settings</h1>
+        <div class="small text-body-secondary font-monospace">settings.json</div>
+      </div>
+      <div class="segmented" role="group" aria-label="Editor mode">
+        <input type="radio" class="btn-check" name="editor-mode" value="form" id="editor-mode-form" autocomplete="off" checked>
+        <label class="btn" for="editor-mode-form">{% include "icons/sliders.html" %} Form</label>
+        <input type="radio" class="btn-check" name="editor-mode" value="json" id="editor-mode-json" autocomplete="off">
+        <label class="btn" for="editor-mode-json">{% include "icons/json.html" %} JSON</label>
+      </div>
+      <button id="format-button" type="button" class="btn btn-outline-secondary" hidden>{% include "icons/json.html" %} Format</button>
+      <button type="submit" class="btn btn-primary">{% include "icons/box-arrow-in-up.html" %} Save</button>
+    </div>
+  </div>
+
+  {% if error %}
+  <div class="alert alert-danger d-flex gap-2 align-items-start" role="alert">
+    {% include "icons/exclamation-triangle-fill.html" %}<span>{{ error }}</span>
+  </div>
+  {% endif %}
+  <div class="alert alert-warning small py-2" role="note">
+    The robot software and this app read <code>settings.json</code> when they start: restart them after saving to apply changes.
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-7">
+      {# ------------------------------------------------------------ Form mode #}
+      <div id="form-pane" class="stack">
+
+        {# General #}
+        <div class="card">
+          <div class="card-body">
+            <label class="field-label" for="platform-name">Robot name</label>
+            <input type="text" class="form-control" id="platform-name" data-path="name" data-type="string" required autocomplete="off">
+            <div class="form-text">Name of this platform, e.g. SQAT.</div>
+          </div>
+        </div>
+
+        {# Coordinate frame #}
+        <div class="section m-0">
+          <button type="button" class="section-toggle" data-bs-toggle="collapse" data-bs-target="#platform-guide" aria-controls="platform-guide" aria-expanded="false">
+            How positions are defined
+            <span class="chevron">{% include "icons/chevron-down.html" %}</span>
+          </button>
+          <div class="collapse" id="platform-guide">
+            <div class="section-body small">
+              <p>All positions (<code>transform</code>) are in metres in one robot frame, the <strong>GPS frame</strong>: <strong>+x is right</strong>, <strong>+y is forward</strong>, <strong>+z is up</strong>. <code>T</code> is the position [x, y, z], <code>R</code> the rotation [roll, pitch, yaw] in degrees (usually 0).</p>
+              <p>The <strong>GPS transform</strong> places the origin of this frame relative to the antenna position the receiver reports. The robot reference point, the rotation centre, the head and every hitch are then placed relative to that origin.</p>
+              <p class="mb-0">Implements hang off a hitch: their sections are placed relative to the <strong>hitch ball</strong>, which is the hitch position moved back by the hitch's link length (see Admin → Implements).</p>
+            </div>
+          </div>
+        </div>
+
+        {# Robot #}
+        <div class="card">
+          <div class="card-header fw-semibold">Robot</div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-sm-4">
+                <label class="field-label" for="robot-width">Width (m)</label>
+                <input type="number" class="form-control" id="robot-width" data-path="robot.width" data-type="number" step="0.001" min="0" data-preview="robot">
+                <div class="form-text">Outer width, across the driving direction.</div>
+              </div>
+              <div class="col-sm-4">
+                <label class="field-label" for="robot-length">Length (m)</label>
+                <input type="number" class="form-control" id="robot-length" data-path="robot.length" data-type="number" step="0.001" min="0" data-preview="robot">
+                <div class="form-text">Outer length, in the driving direction.</div>
+              </div>
+              <div class="col-sm-4">
+                <label class="field-label" for="robot-wheel">Wheel diameter (m)</label>
+                <input type="number" class="form-control" id="robot-wheel" data-path="robot.wheel_diameter" data-type="number" step="0.001" min="0" data-preview="robot">
+                <div class="form-text">Diameter of the drive wheels.</div>
+              </div>
+              <div class="col-12">
+                <label class="field-label" for="robot-config">Drive configuration</label>
+                <select class="form-select" id="robot-config" data-path="robot.config" data-type="string">
+                  {% for config in vehicle_configs %}<option value="{{ config }}">{{ config }}</option>{% endfor %}
+                </select>
+                <div class="form-text"><strong>omni</strong>: can also drive sideways · <strong>diff</strong>: differential (skid) steering · <strong>ackermann</strong>: car-like steering · <strong>4wd4ws</strong>: four-wheel drive and steering.</div>
+              </div>
+              <div class="col-12">
+                {% include "system/components/transform_fields.html" with prefix="robot.transform" label="Reference point" preview="robot" %}
+                <div class="form-text">The point that follows the traject (shown live as the robot on the map), relative to the GPS frame origin.</div>
+              </div>
+              <div class="col-12">
+                <div class="form-check form-switch m-0">
+                  <input class="form-check-input" type="checkbox" role="switch" id="robot-center-toggle" data-optional="robot.transform_center" data-preview="robot">
+                  <label class="form-check-label" for="robot-center-toggle">Separate rotation centre</label>
+                </div>
+                <div class="form-text mt-0 mb-2">Off: the reference point is also the point the robot turns around and the centre of the outline.</div>
+                <div data-optional-body="robot.transform_center">
+                  {% include "system/components/transform_fields.html" with prefix="robot.transform_center" label="Rotation centre" preview="robot" %}
+                </div>
+              </div>
+              <div class="col-12">
+                <div class="form-check form-switch m-0">
+                  <input class="form-check-input" type="checkbox" role="switch" id="robot-head-toggle" data-optional="robot.transform_head" data-preview="robot">
+                  <label class="form-check-label" for="robot-head-toggle">Separate head point</label>
+                </div>
+                <div class="form-text mt-0 mb-2">Off: the reference point is also the head, the point navigation looks ahead from.</div>
+                <div data-optional-body="robot.transform_head">
+                  {% include "system/components/transform_fields.html" with prefix="robot.transform_head" label="Head point" preview="robot" %}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {# Auto driving #}
+        <div class="card">
+          <div class="card-header fw-semibold">Auto driving</div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-sm-6">
+                <label class="field-label" for="auto-vel-min">Minimum speed (m/s)</label>
+                <input type="number" class="form-control" id="auto-vel-min" data-path="auto_velocity.min" data-type="number" step="0.01" min="0">
+                <div class="form-text">Slowest speed the robot drives in auto mode.</div>
+              </div>
+              <div class="col-sm-6">
+                <label class="field-label" for="auto-vel-max">Maximum speed (m/s)</label>
+                <input type="number" class="form-control" id="auto-vel-max" data-path="auto_velocity.max" data-type="number" step="0.01" min="0">
+                <div class="form-text">Fastest speed in auto mode. Must be at least the minimum.</div>
+              </div>
+              <div class="col-sm-6">
+                <label class="field-label" for="auto-acc-lin">Max. linear acceleration</label>
+                <input type="number" class="form-control" id="auto-acc-lin" data-path="auto_max_accel.linear" data-type="number" step="0.01" min="0">
+                <div class="form-text">Limit on how fast the forward speed changes. Lower is smoother.</div>
+              </div>
+              <div class="col-sm-6">
+                <label class="field-label" for="auto-acc-ang">Max. angular acceleration</label>
+                <input type="number" class="form-control" id="auto-acc-ang" data-path="auto_max_accel.angular" data-type="number" step="0.01" min="0">
+                <div class="form-text">Limit on how fast the turning speed changes.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {# Navigation and auto modes #}
+        <div class="card">
+          <div class="card-header fw-semibold">Navigation modes</div>
+          <div class="card-body">
+            <div class="form-text mt-0 mb-2">The navigation algorithms the operator can choose. The id selects the algorithm in the robot software; the name is what the operator sees.</div>
+            <div data-list="nav_modes" data-template="nav-mode-template" class="stack"></div>
+            <button type="button" class="btn btn-outline-secondary btn-sm mt-2" data-add="nav_modes">{% include "icons/plus.html" %} Add navigation mode</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header fw-semibold">Auto modes</div>
+          <div class="card-body">
+            <div class="form-text mt-0 mb-2">Navigation states in which the robot drives itself. The name must match the navigation state (e.g. <code>auto</code>): it decides when the as-applied map is recorded automatically.</div>
+            <div data-list="auto_modes" data-template="auto-mode-template" class="stack"></div>
+            <button type="button" class="btn btn-outline-secondary btn-sm mt-2" data-add="auto_modes">{% include "icons/plus.html" %} Add auto mode</button>
+          </div>
+        </div>
+
+        {# Hitches #}
+        <div>
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <h2 class="h6 m-0">Hitches</h2>
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-add="hitches">{% include "icons/plus.html" %} Add hitch</button>
+          </div>
+          <div data-list="hitches" data-template="hitch-template" class="stack"></div>
+        </div>
+
+        {# GPS #}
+        <div class="card">
+          <div class="card-header fw-semibold">GPS</div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-sm-6">
+                <label class="field-label" for="gps-device">Connection</label>
+                <select class="form-select" id="gps-device" data-path="gps.device" data-type="string">
+                  <option value="socket">socket (network)</option>
+                  <option value="serial">serial (USB)</option>
+                </select>
+                <div class="form-text">How the robot reads the receiver.</div>
+              </div>
+              <div class="col-sm-6">
+                <label class="field-label" for="gps-zone">UTM zone</label>
+                <input type="number" class="form-control" id="gps-zone" data-path="gps.utm_zone" data-type="optional-int" step="1" min="1" max="60" placeholder="31">
+                <div class="form-text">Zone of the field coordinates; 31 for Belgium.</div>
+              </div>
+              <div class="col-sm-6" data-show-when="gps.device=socket">
+                <label class="field-label" for="gps-ip">Receiver IP address</label>
+                <input type="text" class="form-control" id="gps-ip" data-path="gps.ip" data-type="optional-string" autocomplete="off">
+              </div>
+              <div class="col-sm-6" data-show-when="gps.device=socket">
+                <label class="field-label" for="gps-port">UDP port</label>
+                <input type="number" class="form-control" id="gps-port" data-path="gps.udp_port" data-type="optional-int" step="1" min="0">
+              </div>
+              <div class="col-12" data-show-when="gps.device=serial">
+                <label class="field-label" for="gps-usb">USB device</label>
+                <input type="text" class="form-control" id="gps-usb" data-path="gps.usb_port" data-type="optional-string" autocomplete="off" placeholder="/dev/septentrio0">
+              </div>
+              <div class="col-sm-6">
+                <label class="field-label" for="gps-rotation">Antenna rotation (°)</label>
+                <input type="number" class="form-control" id="gps-rotation" data-path="gps.antenna_rotation" data-type="optional-number" step="1" placeholder="0">
+                <div class="form-text">Added to the heading the receiver reports, to correct for how the antennas are mounted on the robot.</div>
+              </div>
+              <div class="col-12">
+                {% include "system/components/transform_fields.html" with prefix="gps.transform" label="GPS frame origin" preview="gps" %}
+                <div class="form-text">Offset from the antenna position to the origin of the robot frame. Everything else is placed relative to that origin.</div>
+              </div>
+              <div class="col-12"><span class="field-label d-block">RTK corrections (NTRIP)</span></div>
+              <div class="col-sm-6">
+                <label class="field-label" for="gps-ntrip-server">Server</label>
+                <input type="text" class="form-control" id="gps-ntrip-server" data-path="gps.ntrip_server" data-type="optional-string" autocomplete="off">
+              </div>
+              <div class="col-sm-6">
+                <label class="field-label" for="gps-ntrip-mount">Mountpoint</label>
+                <input type="text" class="form-control" id="gps-ntrip-mount" data-path="gps.ntrip_mountpoint" data-type="optional-string" autocomplete="off">
+              </div>
+              <div class="col-sm-6">
+                <label class="field-label" for="gps-ntrip-user">User name</label>
+                <input type="text" class="form-control" id="gps-ntrip-user" data-path="gps.ntrip_uname" data-type="optional-string" autocomplete="off">
+              </div>
+              <div class="col-sm-6">
+                <label class="field-label" for="gps-ntrip-pwd">Password</label>
+                <input type="password" class="form-control" id="gps-ntrip-pwd" data-path="gps.ntrip_pwd" data-type="optional-string" autocomplete="new-password">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# ------------------------------------------------------------ JSON mode #}
+      <div class="card" id="json-pane" hidden>
+        <div class="code-editor">
+          <div class="code-gutter" id="line-numbers-container">
+            <div id="line-numbers"></div>
+          </div>
+          <textarea id="json-editor" spellcheck="false" aria-label="Settings JSON"></textarea>
+        </div>
+      </div>
+    </div>
+
+    {# ------------------------------------------------------------ Preview #}
+    <div class="col-lg-5">
+      <div class="card implement-preview-card">
+        <div class="card-header fw-semibold">Preview</div>
+        <div class="card-body">
+          <div class="field-label">Top view</div>
+          <svg class="implement-preview" id="preview-top" role="img" aria-label="Robot seen from above"></svg>
+          <div class="implement-preview-key mt-1">↑ forward (+y) · → right (+x) · seen from above</div>
+          <div class="field-label mt-3">Side view <span class="text-body-secondary fw-normal">(from the left-hand side)</span></div>
+          <svg class="implement-preview implement-preview-side" id="preview-side" role="img" aria-label="Robot seen from the side"></svg>
+          <div class="implement-preview-key mt-1">← forward (+y) · ↑ up (+z)</div>
+          <p class="form-text mb-0">Hitches are drawn lowered (angle 0): filled dot = hitch, open circle = hitch ball. The GPS antenna is drawn without its rotation.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</form>
+
+{# List items, cloned by platform-editor.js. #}
+<template id="nav-mode-template">
+  <div class="d-flex gap-2 align-items-end" data-item>
+    <div class="flex-shrink-0" style="width: 13rem">
+      <label class="field-label">Algorithm (id)</label>
+      <select class="form-select" data-key="id" data-type="int">
+        <option value="1">1 · pp spinning 90</option>
+        <option value="2">2 · pp spinning 180</option>
+        <option value="3">3 · pure pursuit</option>
+        <option value="4">4 · pp roll back</option>
+        <option value="5">5 · external</option>
+      </select>
+    </div>
+    <div class="flex-grow-1">
+      <label class="field-label">Name</label>
+      <input type="text" class="form-control" data-key="name" data-type="string" autocomplete="off">
+    </div>
+    <button type="button" class="btn btn-ghost text-danger btn-icon" data-remove title="Remove" aria-label="Remove">{% include "icons/trash.html" %}</button>
+  </div>
+</template>
+
+<template id="auto-mode-template">
+  <div class="d-flex gap-2 align-items-end" data-item>
+    <div class="flex-shrink-0" style="width: 7rem">
+      <label class="field-label">Id</label>
+      <input type="number" class="form-control" data-key="id" data-type="int" step="1">
+    </div>
+    <div class="flex-grow-1">
+      <label class="field-label">Name</label>
+      <input type="text" class="form-control" data-key="name" data-type="string" autocomplete="off">
+    </div>
+    <button type="button" class="btn btn-ghost text-danger btn-icon" data-remove title="Remove" aria-label="Remove">{% include "icons/trash.html" %}</button>
+  </div>
+</template>
+
+<template id="hitch-template">
+  <div class="section m-0" data-item>
+    <div class="d-flex gap-2 align-items-center">
+      <button type="button" class="section-toggle" data-bs-toggle="collapse" aria-expanded="true">
+        <span data-item-title></span>
+        <span class="chevron">{% include "icons/chevron-down.html" %}</span>
+      </button>
+      <button type="button" class="btn btn-ghost text-danger btn-icon" data-remove title="Remove hitch" aria-label="Remove hitch">{% include "icons/trash.html" %}</button>
+    </div>
+    <div class="collapse show" data-item-body>
+      <div class="section-body">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="field-label">Name</label>
+            <select class="form-select" data-key="name" data-type="string">
+              {% for name in hitch_names %}<option value="{{ name }}">{{ name }}{% if config_hitch_names is not None and name not in config_hitch_names %} (not in config.json){% endif %}</option>{% endfor %}
+            </select>
+            <div class="form-text">Tasks and the robot refer to the hitch by this name. It must match <code>config.json</code>: the PLC/Redis variables <code>plc.control.hitch_&lt;name&gt;</code> and <code>plc.monitor.hitch_&lt;name&gt;</code> (lower case) are generated from it there.{% if config_hitch_names is not None %} Defined in config.json: <strong>{{ config_hitch_names|join:", "|default:"none" }}</strong>.{% endif %}</div>
+          </div>
+          <div class="col-sm-4">
+            <label class="field-label">Lowest setpoint (cm)</label>
+            <input type="number" class="form-control" data-key="min" data-type="number" step="1">
+            <div class="form-text">Bottom of the hitch height slider.</div>
+          </div>
+          <div class="col-sm-4">
+            <label class="field-label">Highest setpoint (cm)</label>
+            <input type="number" class="form-control" data-key="max" data-type="number" step="1">
+            <div class="form-text">Top of the slider.</div>
+          </div>
+          <div class="col-sm-4">
+            <label class="field-label">Link length (m)</label>
+            <input type="number" class="form-control" data-key="link_length" data-type="number" step="0.001" min="0" data-preview="hitch">
+            <div class="form-text">Lifting arm from the hitch to the hitch ball.</div>
+          </div>
+          <div class="col-12">
+            <span class="field-label d-block">Task types</span>
+            <div class="d-flex flex-wrap gap-3">
+              {% for type in types %}
+              <div class="form-check m-0">
+                <input class="form-check-input" type="checkbox" value="{{ type }}" data-key="types" data-type="checkbox-list">
+                <label class="form-check-label">{{ type }}</label>
+              </div>
+              {% endfor %}
+            </div>
+            <div class="form-text">Kinds of implement this hitch can carry; an implement needs at least one matching type.</div>
+          </div>
+          <div class="col-12">
+            {% include "system/components/transform_fields.html" with prefix="transform" label="Position" preview="hitch" relative=True %}
+            <div class="form-text">Hinge point of the hitch, relative to the GPS frame origin.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+{{ settings_data|json_script:"settings_data" }}
+{{ hitch_names|json_script:"hitch_names" }}
+{{ config_hitch_names|json_script:"config_hitch_names" }}
+{{ raw_json|json_script:"raw_json" }}
+<script type="module" src="{% static 'js/pages/platform-editor.js' %}"></script>
+
+{% endblock %}
