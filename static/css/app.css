@@ -1177,6 +1177,42 @@ input[type="number"] {
     gap: .35rem;
 }
 
+/* "+ Add filter" search with its attribute list (FilterPicker in applied-page.js). The list opens in place:
+   the sidebar scrolls itself, so a floating list would be cut off at its bottom. */
+.applied-filter-options {
+    margin-top: .25rem;
+    max-height: 16rem;
+    padding: .25rem;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--bs-border-radius);
+    box-shadow: var(--shadow-md);
+}
+
+.applied-filter-option {
+    padding: .3rem .5rem;
+    font-size: .8125rem;
+    overflow-wrap: anywhere;
+    border-radius: var(--bs-border-radius-sm);
+    cursor: pointer;
+}
+
+.applied-filter-option:hover,
+.applied-filter-option.is-active {
+    background: var(--slate-100);
+}
+
+.applied-filter-option.is-active {
+    color: var(--brand-text);
+}
+
+.applied-filter-empty {
+    padding: .3rem .5rem;
+    font-size: .8125rem;
+    color: var(--slate-500);
+}
+
 .applied-popup {
     max-height: 18rem;
     overflow-y: auto;
