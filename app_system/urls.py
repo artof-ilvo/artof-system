@@ -19,6 +19,7 @@ urlpatterns = [
     path('addon/delete', views.delete_addon, name='delete_addon'),
     path('monitor/', views.monitor, name='monitor'),
     path('monitor/edit', views.monitor_edit, name='monitor_edit'),
+    path('monitor/pulse', views.monitor_pulse, name='monitor_pulse'),
     path('implement/', views.implement, name='implement'),
     path('implement/edit', views.implement_edit, name='implement_edit'),
     path('implement/remove', views.implement_remove, name='implement_remove')

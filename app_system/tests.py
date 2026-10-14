@@ -300,3 +300,49 @@ class AddonEditTest(SimpleTestCase):
         response = self.post('{"Name": ', original_name='taskmap')
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.context['raw_json'], '{"Name": ')
+
+
+class FakeRedis:
+    """Records writes instead of touching the robot's Redis."""
+    variables = {'flag': {'type': 'bool'}, 'speed': {'type': 'double'}}
+
+    def __init__(self, value):
+        self.value = value
+        self.writes = []
+
+    def get_value(self, name):
+        return self.value
+
+    def set_value(self, name, value):
+        self.writes.append((name, value))
+        self.value = value
+
+
+@mock.patch('app_system.views.PULSE_SECONDS', 0)
+class MonitorPulseTest(SimpleTestCase):
+    def pulse(self, redis, name='flag'):
+        with mock.patch('app_system.views.redis_server', redis):
+            return self.client.post(reverse('system:monitor_pulse'), json.dumps({'name': name}),
+                                    content_type='application/json')
+
+    def test_pulses_false_to_true_and_back(self):
+        redis = FakeRedis(False)
+        self.assertEqual(self.pulse(redis).status_code, 200)
+        self.assertEqual(redis.writes, [('flag', True), ('flag', False)])
+
+    def test_pulses_true_to_false_and_back(self):
+        redis = FakeRedis(True)
+        self.assertEqual(self.pulse(redis).status_code, 200)
+        self.assertEqual(redis.writes, [('flag', False), ('flag', True)])
+
+    def test_refuses_non_booleans(self):
+        redis = FakeRedis(1.0)
+        self.assertEqual(self.pulse(redis, 'speed').status_code, 400)
+        self.assertEqual(self.pulse(redis, 'missing').status_code, 400)
+        self.assertEqual(redis.writes, [])
+
+    def test_refuses_a_second_pulse_while_one_runs(self):
+        redis = FakeRedis(False)
+        with mock.patch('app_system.views._pulsing', {'flag'}):
+            self.assertEqual(self.pulse(redis).status_code, 409)
+        self.assertEqual(redis.writes, [])

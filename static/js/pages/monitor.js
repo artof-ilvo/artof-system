@@ -15,7 +15,7 @@ function formatValue(type, value) {
 
 /** One row of the monitor table: shows the live value of a Redis variable and lets the user write a new one. */
 class VariableRow {
-    constructor(row, index, editUrl) {
+    constructor(row, index, editUrl, pulseUrl) {
         this.row = row;
         this.index = index;
         this.name = row.dataset.variable;
@@ -23,9 +23,12 @@ class VariableRow {
         this.valueCell = row.querySelector('[data-value]');
         this.input = row.querySelector('[data-edit]');
         this.editUrl = editUrl;
+        this.pulseUrl = pulseUrl;
 
         const button = row.querySelector('[data-upload]');
         button.addEventListener('click', () => withBusy(button, this.write()));
+        const pulseButton = row.querySelector('[data-pulse]');
+        pulseButton?.addEventListener('click', () => withBusy(pulseButton, this.pulse()));
         this.pinButton = row.querySelector('[data-pin]');
     }
 
@@ -49,6 +52,15 @@ class VariableRow {
             showToast(`${this.name} = ${value}`);
         } catch (error) {
             showError(`Writing ${this.name}`, error);
+        }
+    }
+
+    /** The server holds the opposite value for 0.5 s and answers once the variable is restored. */
+    async pulse() {
+        try {
+            await postJSON(this.pulseUrl, { name: this.name });
+        } catch (error) {
+            showError(`Pulsing ${this.name}`, error);
         }
     }
 }
@@ -131,7 +143,7 @@ const table = byId('monitor-table');
 const search = byId('search');
 const rows = new Map();
 [...table.tBodies[0].rows].forEach((row, index) => {
-    const variable = new VariableRow(row, index, table.dataset.editUrl);
+    const variable = new VariableRow(row, index, table.dataset.editUrl, table.dataset.pulseUrl);
     rows.set(variable.name, variable);
 });
 

@@ -1680,6 +1680,17 @@ input[type="number"] {
     max-width: 12rem;
 }
 
+/* The pin button sits in front of the variable name. */
+.variable-name-cell {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+}
+
+.variable-name-cell > span {
+    min-width: 0;
+}
+
 /* Variable names are long dotted paths: let them wrap at the dots. */
 .variable-name {
     font-family: var(--bs-font-monospace);

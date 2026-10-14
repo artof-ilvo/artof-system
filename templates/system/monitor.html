@@ -7,7 +7,7 @@
   <div class="page-header mb-0">
     <div>
       <h1>Monitor</h1>
-      <p class="page-subtitle">Live Redis variables. Pin variables to keep them in view; write a new value with the upload button.</p>
+      <p class="page-subtitle">Live Redis variables. Pin variables to keep them in view; write a new value with the upload button, or pulse a boolean to its opposite value for 0.5 s.</p>
     </div>
     <div class="search-input">
       {% include "icons/search.html" %}
@@ -28,7 +28,7 @@
 </div>
 
 <div class="card mt-2">
-  <table class="table table-modern table-hover table-cards" id="monitor-table" data-edit-url="{% url 'system:monitor_edit' %}">
+  <table class="table table-modern table-hover table-cards" id="monitor-table" data-edit-url="{% url 'system:monitor_edit' %}" data-pulse-url="{% url 'system:monitor_pulse' %}">
     <thead>
       <tr>
         <th scope="col">Variable</th>
@@ -41,7 +41,14 @@
     <tbody>
     {% for full_name, variable in variables.items %}
       <tr data-variable="{{ full_name }}" data-type="{{ variable.type }}">
-        <td class="variable-name">{{ full_name }}</td>
+        <td class="variable-name">
+          <div class="variable-name-cell">
+            <button class="btn btn-ghost btn-icon pin-toggle" type="button" data-pin aria-pressed="false" title="Pin to the top" aria-label="Pin {{ full_name }}">
+              {% include "icons/pin-angle.html" %}{% include "icons/pin-angle-fill.html" %}
+            </button>
+            <span>{{ full_name }}</span>
+          </div>
+        </td>
         <td data-label="Type"><span class="chip">{{ variable.type }}</span></td>
         <td data-label="Value" class="monitor-value" data-value></td>
         <td data-label="New value">
@@ -57,9 +64,11 @@
         </td>
         <td>
           <div class="row-actions">
-            <button class="btn btn-ghost btn-icon pin-toggle" type="button" data-pin aria-pressed="false" title="Pin to the top" aria-label="Pin {{ full_name }}">
-              {% include "icons/pin-angle.html" %}{% include "icons/pin-angle-fill.html" %}
+            {% if variable.type == "bool" %}
+            <button class="btn btn-ghost btn-icon" type="button" data-pulse title="Pulse: the opposite value for 0.5 s" aria-label="Pulse {{ full_name }}">
+              {% include "icons/pulse.html" %}
             </button>
+            {% endif %}
             <button class="btn btn-ghost btn-icon" type="button" data-upload title="Write value" aria-label="Write value of {{ full_name }}">
               {% include "icons/cloud-upload.html" %}
             </button>

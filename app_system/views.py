@@ -13,6 +13,8 @@ from os import path
 import copy
 import json
 import re
+import threading
+import time
 
 
 # Create your views here.
@@ -307,6 +309,40 @@ def monitor_edit(request):
     body = json.loads(body_unicode)
     redis_server.set_value(body["name"], body["value"])
     return JsonResponse({})
+
+# How long a pulse holds a boolean at the opposite value (s).
+PULSE_SECONDS = 0.5
+# Booleans being pulsed: a second pulse would read the inverted value and leave it inverted.
+_pulsing = set()
+_pulsing_lock = threading.Lock()
+
+
+def monitor_pulse(request):
+    """Set a boolean Redis variable to the opposite value for PULSE_SECONDS, then restore it."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    try:
+        name = json.loads(request.body.decode('utf-8'))['name']
+    except (ValueError, KeyError, TypeError):
+        return JsonResponse({'error': 'Expected JSON with a name'}, status=400)
+    if redis_server.variables.get(name, {}).get('type') != 'bool':
+        return JsonResponse({'error': f'{name} is not a boolean variable'}, status=400)
+
+    with _pulsing_lock:
+        if name in _pulsing:
+            return JsonResponse({'error': f'{name} is already being pulsed'}, status=409)
+        _pulsing.add(name)
+    try:
+        value = bool(redis_server.get_value(name))
+        redis_server.set_value(name, not value)
+        try:
+            time.sleep(PULSE_SECONDS)
+        finally:
+            redis_server.set_value(name, value)
+    finally:
+        with _pulsing_lock:
+            _pulsing.discard(name)
+    return JsonResponse({'name': name, 'value': value})
 
 
 # Implement
