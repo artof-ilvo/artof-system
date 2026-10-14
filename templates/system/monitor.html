@@ -7,7 +7,7 @@
   <div class="page-header mb-0">
     <div>
       <h1>Monitor</h1>
-      <p class="page-subtitle">Live Redis variables. Pin variables to keep them in view; write a new value with the upload button, or pulse a boolean to its opposite value for 0.5 s.</p>
+      <p class="page-subtitle">Live Redis variables. Pin variables to keep them in view and graph them; write a new value with the upload button, or pulse a boolean to its opposite value for 0.5 s.</p>
     </div>
     <div class="search-input">
       {% include "icons/search.html" %}
@@ -23,6 +23,25 @@
     </div>
     <div class="monitor-pinned-body">
       <table class="table table-modern table-cards mb-0" id="monitor-pinned-table"><tbody></tbody></table>
+    </div>
+  </div>
+
+  <!-- Live graph of the pinned variables whose graph button is on; hidden while there are none -->
+  <div class="card mt-2 monitor-graph" id="monitor-graph" hidden>
+    <div class="card-header d-flex align-items-center gap-3">
+      <button class="monitor-graph-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#monitor-graph-body" aria-controls="monitor-graph-body" aria-expanded="true">
+        {% include "icons/chevron-down.html" %}
+        <h2 class="card-title-sm m-0">Graph</h2>
+        <span class="graph-window">last 30 s</span>
+      </button>
+      <button class="btn btn-link btn-sm p-0 ms-auto" type="button" id="monitor-graph-clear">Clear graph</button>
+    </div>
+    <div class="collapse show" id="monitor-graph-body" data-graph-body>
+      <div class="monitor-graph-strips" data-graph-strips></div>
+      <div class="graph-axis" aria-hidden="true">
+        <span class="graph-axis-ticks"><span>-30 s</span><span>-20 s</span><span>-10 s</span><span>now</span></span>
+        <span class="graph-axis-cursor" data-graph-cursor></span>
+      </div>
     </div>
   </div>
 </div>
@@ -46,6 +65,13 @@
             <button class="btn btn-ghost btn-icon pin-toggle" type="button" data-pin aria-pressed="false" title="Pin to the top" aria-label="Pin {{ full_name }}">
               {% include "icons/pin-angle.html" %}{% include "icons/pin-angle-fill.html" %}
             </button>
+            {% if variable.type != "string" %}
+            <button class="btn btn-ghost btn-icon graph-toggle" type="button" data-graph aria-pressed="false" title="Show in the graph" aria-label="Show {{ full_name }} in the graph">
+              {% include "icons/graph-up.html" %}
+            </button>
+            {% else %}
+            <span class="graph-toggle-spacer" data-graph aria-hidden="true"></span>
+            {% endif %}
             <span>{{ full_name }}</span>
           </div>
         </td>

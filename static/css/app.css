@@ -714,6 +714,210 @@ input[type="number"] {
     font-weight: 600;
 }
 
+/* Graph buttons only work on pinned rows. */
+#monitor-table [data-graph] {
+    display: none;
+}
+
+/* Keeps names aligned in the pinned card for variables that cannot be graphed (strings). */
+.graph-toggle-spacer {
+    width: var(--touch-size);
+    flex-shrink: 0;
+}
+
+.graph-toggle[aria-pressed="true"] {
+    color: var(--brand);
+    background: var(--brand-subtle);
+}
+
+/* Live graph: one strip per trace (label | y range | plot), on a shared time axis. */
+.monitor-graph {
+    --graph-label-width: 15rem;
+    --graph-scale-width: 3.5rem;
+}
+
+.monitor-graph-toggle {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: 0;
+    color: var(--slate-900);
+    background: none;
+    border: 0;
+}
+
+.monitor-graph-toggle .bi-chevron-down {
+    color: var(--slate-500);
+    transform: rotate(-90deg);
+    transition: transform .2s;
+}
+
+.monitor-graph-toggle[aria-expanded="true"] .bi-chevron-down {
+    transform: none;
+}
+
+.graph-window {
+    font-size: .8125rem;
+    color: var(--slate-500);
+}
+
+.monitor-graph-strips {
+    max-height: 30vh;
+    overflow-y: auto;
+    padding: .5rem 1rem 0;
+}
+
+.graph-strip {
+    display: grid;
+    grid-template-columns: var(--graph-label-width) var(--graph-scale-width) 1fr;
+    align-items: stretch;
+    gap: .5rem;
+    height: 3.5rem;
+    margin-bottom: .375rem;
+}
+
+.graph-label {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-content: center;
+    column-gap: .4rem;
+    min-width: 0;
+}
+
+.graph-swatch {
+    grid-row: span 2;
+    align-self: stretch;
+    width: 4px;
+    border-radius: 2px;
+    background: var(--trace-color);
+}
+
+.graph-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--bs-font-monospace);
+    font-size: .75rem;
+    color: var(--slate-700);
+}
+
+.graph-value {
+    font-family: var(--bs-font-monospace);
+    font-size: .875rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--slate-900);
+}
+
+.graph-scale {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: .2rem 0;
+    font-size: .6875rem;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    color: var(--slate-500);
+    overflow: hidden;
+}
+
+.graph-plot {
+    position: relative;
+    border-left: 1px solid var(--slate-300);
+    border-bottom: 1px solid var(--slate-200);
+    cursor: crosshair;
+}
+
+.graph-plot svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.graph-grid {
+    stroke: var(--slate-100);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+}
+
+.graph-line {
+    fill: none;
+    stroke: var(--trace-color);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+}
+
+.graph-cursor {
+    stroke: var(--slate-500);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+}
+
+.graph-dot {
+    stroke: var(--trace-color);
+    stroke-width: 8;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+}
+
+.graph-axis {
+    display: grid;
+    grid-template-columns: calc(var(--graph-label-width) + var(--graph-scale-width) + 1rem) 1fr;
+    padding: .25rem 1rem .625rem;
+    font-size: .6875rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--slate-500);
+}
+
+.graph-axis-ticks {
+    grid-column: 2;
+    display: flex;
+    justify-content: space-between;
+}
+
+.graph-axis-cursor {
+    grid-column: 1;
+    grid-row: 1;
+    font-weight: 600;
+    color: var(--slate-700);
+}
+
+@media (max-width: 767.98px) {
+    .monitor-graph {
+        --graph-scale-width: 2.75rem;
+    }
+
+    /* The label goes above the plot. */
+    .graph-strip {
+        grid-template-columns: var(--graph-scale-width) 1fr;
+        grid-template-rows: auto 3rem;
+        height: auto;
+        row-gap: .2rem;
+    }
+
+    .graph-label {
+        grid-column: 1 / -1;
+        grid-template-columns: auto auto 1fr;
+    }
+
+    .graph-swatch {
+        grid-row: auto;
+        height: .75rem;
+        align-self: center;
+    }
+
+    .graph-value {
+        justify-self: end;
+    }
+
+    .graph-axis {
+        grid-template-columns: calc(var(--graph-scale-width) + .5rem) 1fr;
+    }
+}
+
 /* Same columns in the pinned card and the full list, so values line up. */
 @media (min-width: 768px) {
     #monitor-table,
