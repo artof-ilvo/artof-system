@@ -478,6 +478,38 @@ input[type="number"] {
     gap: .5rem;
 }
 
+/* Navigation state and substate, kept together so they share a row. */
+.status-state {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem 1rem;
+}
+
+/* Desktop: state on the left, cross-track error in the middle, chips on the right. */
+@media (min-width: 992px) {
+    .status-strip {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+    }
+
+    .status-strip .status-state {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .status-strip .xte {
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    .status-strip .status-chips {
+        grid-column: 3;
+        grid-row: 1;
+        justify-content: flex-end;
+    }
+}
+
 .status-chips {
     display: flex;
     flex-wrap: wrap;
@@ -512,6 +544,59 @@ input[type="number"] {
 .chip-danger {
     color: var(--danger-text);
     background: var(--danger-subtle);
+}
+
+/* Substate flags (plc.monitor.substate.*): muted when off, coloured by data-variant when on. */
+.substate-field,
+.substate-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .375rem;
+}
+
+.substate-field {
+    gap: .5rem;
+}
+
+.substate-chip {
+    padding: .2rem .55rem;
+    font-size: .75rem;
+    color: var(--slate-300);
+    background: var(--slate-50);
+    box-shadow: inset 0 0 0 1px var(--slate-200);
+}
+
+.substate-chip.is-on { box-shadow: none; }
+.substate-chip.is-on[data-variant="brand"] { color: var(--brand-text); background: var(--brand-subtle); }
+.substate-chip.is-on[data-variant="success"] { color: var(--success-text); background: var(--success-subtle); }
+.substate-chip.is-on[data-variant="warning"] { color: var(--warning-text); background: var(--warning-subtle); }
+.substate-chip.is-on[data-variant="danger"] { color: var(--danger-text); background: var(--danger-subtle); }
+
+/* Only shown on phones, in place of the hidden inactive chips. */
+.substate-none {
+    display: none;
+}
+
+/* Phones: the gauge takes the full width, State and Substate share the next row,
+   and Substate shows only the active chip. */
+@media (max-width: 575.98px) {
+    .status-strip .xte {
+        flex: 1 1 100%;
+    }
+
+    .status-strip .xte-gauge {
+        flex: 1;
+        width: auto;
+    }
+
+    .substate-chip:not(.is-on) {
+        display: none;
+    }
+
+    .substate-field:not(:has(.is-on)) .substate-none {
+        display: inline-flex;
+    }
 }
 
 /* Cross-track error: fills to the left (negative) or right (positive) from the centre. */

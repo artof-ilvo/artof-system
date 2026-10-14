@@ -19,7 +19,7 @@ function gpsVariant(fix) {
     return 'chip-warning';
 }
 
-/** The status bar of the app pages: cross-track error, navigation state, GPS, battery, heartbeat. */
+/** The status bar of the app pages: cross-track error, navigation state, substate, GPS, battery, heartbeat. */
 export class StatusBar {
     constructor(stateForm) {
         this.errorLabel = byId('error-label');
@@ -30,6 +30,7 @@ export class StatusBar {
         this.gpsLabel = byId('gps-label');
         this.batteryLabel = byId('battery-label');
         this.heart = byId('heart-label');
+        this.substateChips = byId('substate-field').querySelectorAll('[data-substate]');
         this.stateForm = stateForm;
         this.lastUserChange = 0;
 
@@ -57,6 +58,11 @@ export class StatusBar {
         const power = status.power_level;
         this.batteryLabel.textContent = typeof power === 'number' ? `${Math.round(power)}%` : power;
         this.heart.classList.toggle('is-on', Boolean(status.heartbeat));
+
+        // robot.status names only the first active substate, and leaves it out when none is.
+        for (const chip of this.substateChips) {
+            chip.classList.toggle('is-on', chip.dataset.substate === status.current_substate);
+        }
 
         if (Date.now() - this.lastUserChange > USER_STATE_GRACE_MS) {
             const radio = this.stateForm.querySelector(`input[name="state"][value="${CSS.escape(status.current_state)}"]`);
