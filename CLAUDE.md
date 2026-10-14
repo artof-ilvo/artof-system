@@ -21,7 +21,7 @@ ILVO_PATH=/var/lib/ilvo DEBUG=0 .venv/bin/daphne -b 127.0.0.1 -p 8000 ilvo.asgi:
 
 .venv/bin/python manage.py check
 .venv/bin/python manage.py test app_core          # single app
-.venv/bin/python manage.py test app_core.tests.TaskFormSetTest.test_formset
+.venv/bin/python manage.py test app_core.tests.FileFieldFormTest.test_accepts_several_files
 ```
 
 Shapefile tests write field data, so run them against a copy of the ILVO directory (they refuse to run on `/var/lib/ilvo`):
@@ -35,7 +35,7 @@ Shapes are saved through `app_core/utils/shapefiles.py`: uploads are stored as t
 
 `app_system/tests.py` (implement editor) also writes files and needs `ILVO_PATH` set to such a copy.
 
-`app_core/tests.py` imports `app_core.forms.task`, which no longer exists, so that test module currently fails to import. There is no linter or JS build configured.
+There is no linter or JS build configured.
 
 Docker: `docker build -t axelwillekens/artof-system:sqat .` and run with `--network=host -v /var/lib/ilvo:/var/lib/ilvo`. CI (`.github/workflows/ci.yml`) only builds and pushes the image (tag `dev` and version/`latest`).
 
