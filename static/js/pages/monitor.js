@@ -30,6 +30,8 @@ function formatValue(type, value) {
     if (type === 'bool') return value ? 'true' : 'false';
     if (type.includes('int')) return Number(value).toFixed(0);
     if (type === 'float' || type === 'double') return Number(value).toFixed(5);
+    // lfloat (PLC LREAL) holds GPS latitude/longitude: 8 decimals of a degree is about 1 mm.
+    if (type === 'lfloat') return Number(value).toFixed(8);
     return String(value);
 }
 

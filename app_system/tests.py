@@ -346,3 +346,18 @@ class MonitorPulseTest(SimpleTestCase):
         with mock.patch('app_system.views._pulsing', {'flag'}):
             self.assertEqual(self.pulse(redis).status_code, 409)
         self.assertEqual(redis.writes, [])
+
+
+class MonitorPageTest(SimpleTestCase):
+    def render(self, variables):
+        redis = mock.Mock(variables=variables)
+        with mock.patch('app_system.views.redis_server', redis):
+            return self.client.get(reverse('system:monitor')).content.decode()
+
+    def test_lfloat_gets_a_decimal_input(self):
+        html = self.render({'plc.control.gps.latitude': {'type': 'lfloat'}})
+        self.assertIn('type="number" step="any"', html)
+
+    def test_float_and_double_get_a_decimal_input(self):
+        html = self.render({'speed': {'type': 'float'}, 'heading': {'type': 'double'}})
+        self.assertEqual(html.count('type="number" step="0.01"'), 2)
