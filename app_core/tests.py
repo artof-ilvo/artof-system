@@ -1,22 +1,38 @@
-from django.test import TestCase
-from .forms.task import TaskFormSet
+"""
+Shapefile upload form: several files in one field, and only shapefile parts allowed.
+"""
+from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import SimpleTestCase
+from django.utils.datastructures import MultiValueDict
 
-from .utils.visualisation import Robot
-from artof_utils.schemas.state import State
+from .forms.multifileinput import FileFieldForm
+from .forms.validators import validate_shapefile
 
-# Create your tests here.
-class TaskFormSetTest(TestCase):
-    def test_formset(self):
-        # Create a formset with a prefix
-        query_params = {'form-TOTAL_FORMS': '2', 'form-INITIAL_FORMS': '2', 'form-MIN_NUM_FORMS': '0', 'form-MAX_NUM_FORMS': '1000', 'form-0-task_name': 'Task1', 'form-0-files': '', 'form-0-hitch': 'FB', 'form-0-type': 'hitch', 'form-0-implement': 'none', 'form-1-task_name': 'Task2', 'form-1-files': '', 'form-1-hitch': 'FB', 'form-1-type': 'continuous', 'form-1-implement': 'none'}
-        formset_data = {key: value for key, value in query_params.items() if key.startswith('form')}
-        # Initialize the formset with the filtered data
-        formset = TaskFormSet(data=formset_data, prefix='form')
 
-        # Check that the formset is valid
-        self.assertTrue(formset.is_valid())
+def upload(name):
+    return SimpleUploadedFile(name, b'data')
 
-        # Access the cleaned data and verify specific values
-        cleaned_data = formset.cleaned_data
-        self.assertEqual(cleaned_data[0]['task_name'], 'Task1')
-        self.assertEqual(cleaned_data[1]['task_name'], 'Task2')
+
+class FileFieldFormTest(SimpleTestCase):
+    def form(self, *names):
+        return FileFieldForm(files=MultiValueDict({'files': [upload(name) for name in names]}))
+
+    def test_accepts_several_files(self):
+        form = self.form('field.shp', 'field.shx', 'field.dbf')
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual([file.name for file in form.cleaned_data['files']], ['field.shp', 'field.shx', 'field.dbf'])
+
+    def test_accepts_a_single_file(self):
+        form = FileFieldForm(files={'files': upload('field.shp')})
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['files'].name, 'field.shp')
+
+
+class ValidateShapefileTest(SimpleTestCase):
+    def test_accepts_shapefile_parts(self):
+        validate_shapefile([upload(f'field{ext}') for ext in ('.shp', '.shx', '.dbf', '.prj', '.cpg')])
+
+    def test_refuses_other_files(self):
+        with self.assertRaises(ValidationError):
+            validate_shapefile([upload('field.shp'), upload('field.geojson')])

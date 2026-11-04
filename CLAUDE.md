@@ -21,7 +21,7 @@ ILVO_PATH=/var/lib/ilvo DEBUG=0 .venv/bin/daphne -b 127.0.0.1 -p 8000 ilvo.asgi:
 
 .venv/bin/python manage.py check
 .venv/bin/python manage.py test app_core          # single app
-.venv/bin/python manage.py test app_core.tests.TaskFormSetTest.test_formset
+.venv/bin/python manage.py test app_core.tests.FileFieldFormTest.test_accepts_several_files
 ```
 
 Shapefile tests write field data, so run them against a copy of the ILVO directory (they refuse to run on `/var/lib/ilvo`):
@@ -35,7 +35,7 @@ Shapes are saved through `app_core/utils/shapefiles.py`: uploads are stored as t
 
 `app_system/tests.py` (implement editor) also writes files and needs `ILVO_PATH` set to such a copy.
 
-`app_core/tests.py` imports `app_core.forms.task`, which no longer exists, so that test module currently fails to import. There is no linter or JS build configured.
+There is no linter or JS build configured.
 
 Docker: `docker build -t axelwillekens/artof-system:sqat .` and run with `--network=host -v /var/lib/ilvo:/var/lib/ilvo`. CI (`.github/workflows/ci.yml`) only builds and pushes the image (tag `dev` and version/`latest`).
 
@@ -69,7 +69,7 @@ Server-rendered Django templates + Bootstrap 5 + Leaflet (plugins: rotate-map, p
 - Coordinates: geometries carry both projected coordinates (`xy`, `paths`, `rings`, `points` in the field's UTM CRS) and `latlng` (WGS84) for Leaflet.
 - As-applied sessions: the Redis flag `pc.as_applied.record` is switched on/off by the task-map addon when the robot enters/leaves auto mode (`artof_utils.as_applied.AutoModeRecording`); outside auto mode the map toolbar's record toggle sets it (`core:map_as_applied_record` refuses with 409 in auto mode). The separate **task-map addon** (`~/Documents/artof/addons/taskmap-addon`, `taskmap` in `system.ilvoAddons`) records and refreshes `pc.as_applied.heartbeat` (the pages' "addon running" check) and `pc.as_applied.session`. A session is a folder `field/<field>/as_applied/<YYYYmmdd-HHMMSS>/` with `sections.gpkg` (swept section polygons, rate) and `points.gpkg` (`robot.ref.state` point + all Redis variables as columns); format, reading and writing live in `artof_utils.as_applied`.
   - Map tab (`static/js/pages/map/as-applied-panel.js`): draws the sections of the latest/running session live from `core:map_as_applied` (`?session=&skip=`).
-  - Applied tab (`core:applied`, `static/js/pages/applied-page.js`, filter/summary logic in `app_core/utils/applied.py`): pick field, session and layer, colour by and filter on any attribute. Filtering is server-side (`core:applied_features` reads only the colour and filter columns, the points layer has ~270); a clicked feature's attributes come from `core:applied_feature`. The traject is its own layer behind the "Show traject" switch (remembered in localStorage), and filters are added through a search list over the layer's attributes (`FilterPicker`).
+  - Applied tab (`core:applied`, `static/js/pages/applied-page.js`, filter/summary logic in `app_core/utils/applied.py`): pick field, session and layer, colour by and filter on any attribute. Filtering is server-side (`core:applied_features` reads only the colour and filter columns, the points layer has ~270); a clicked feature's attributes come from `core:applied_feature`. The traject is its own layer behind the "Show traject" switch (remembered in localStorage, like the last field, its recording, the layer and per layer the colour and filters: `applied-view`, `ViewState`; opening the page without `?field=` goes to the remembered field), and the colour attribute is picked and filters are added through a search list over the layer's attributes (`AttributePicker`). "Delete all recordings" (`core:applied_delete`, POST `field`) removes the field's whole `as_applied/` folder after a dialog that offers the field download first; it is refused (409) while recording into the current field.
 
 ## Gotchas
 

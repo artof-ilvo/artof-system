@@ -66,11 +66,24 @@
             <span class="chip xte-value" id="error-label">0.00 m</span>
           </div>
 
-          <form id="navigation-state-form" method="POST" action="{% url 'core:navigation_state' %}" class="m-0">
-            {% csrf_token %}
-            {% load filters %}
-            {% include "components/radio_multiple.html" with label="State" options=navigation_state.states|split default=navigation_state.current_state base_id="state" %}
-          </form>
+          <div class="status-state">
+            <form id="navigation-state-form" method="POST" action="{% url 'core:navigation_state' %}" class="m-0">
+              {% csrf_token %}
+              {% load filters %}
+              {% include "components/radio_multiple.html" with label="State" options=navigation_state.states|split default=navigation_state.current_state base_id="state" %}
+            </form>
+
+            <div class="substate-field" id="substate-field">
+              <div class="substate-chips" role="group" aria-label="Substate" title="Substate">
+                <span class="chip substate-chip" data-substate="programming" data-variant="brand">Programming</span>
+                <span class="chip substate-chip" data-substate="implement_control" data-variant="success">Implement control</span>
+                <span class="chip substate-chip" data-substate="inhibited" data-variant="danger">Inhibited</span>
+                <span class="chip substate-chip" data-substate="aware" data-variant="warning">Aware</span>
+                <span class="chip substate-chip" data-substate="stay_clear" data-variant="danger">Stay clear</span>
+                <span class="chip substate-chip substate-none">No substate</span>
+              </div>
+            </div>
+          </div>
 
           <div class="status-chips">
             <span class="chip chip-danger" id="gps-chip" title="GPS">

@@ -1,7 +1,7 @@
 import './app-base.js';
 import { showError } from '../components/toast-stack.js';
-import { byId, fillWindowHeight, readJSON } from '../lib/dom.js';
-import { get } from '../lib/http.js';
+import { byId, fillWindowHeight, readJSON, withBusy } from '../lib/dom.js';
+import { get, postForm } from '../lib/http.js';
 import { drawGeofence, drawTask, drawTraject } from '../map/field-layers.js';
 import { createMap } from '../map/robot-map.js';
 import { RateColors, sessionLabel } from './map/as-applied-panel.js';
@@ -14,6 +14,8 @@ const RELOAD_DELAY_MS = 350;
 const SHOW_TRAJECT_KEY = 'applied-show-traject';
 // At most this many matching attributes are listed in the filter search.
 const MAX_FILTER_OPTIONS = 200;
+// Remembered per browser: the last field, its recording, the layer and per layer the colour and filters.
+const VIEW_KEY = 'applied-view';
 
 const escapeHTML = (text) => String(text).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -130,6 +132,28 @@ class FilterRow {
         this.element.addEventListener('change', onChange);
     }
 
+    /**
+     * What to remember of this row. Value lists remember the unticked values, so values that only occur in
+     * another recording are shown.
+     */
+    get saved() {
+        const { name } = this.summary;
+        if (this.boxes) return { name, exclude: this.boxes.filter((box) => !box.checked).map((box) => box.value) };
+        if (this.min) return { name, min: this.min.value, max: this.max.value };
+        return { name, text: this.text.value };
+    }
+
+    restore(saved) {
+        if (this.boxes && Array.isArray(saved.exclude)) {
+            for (const box of this.boxes) box.checked = !saved.exclude.includes(box.value);
+        } else if (this.min) {
+            if (saved.min !== undefined) this.min.value = saved.min;
+            if (saved.max !== undefined) this.max.value = saved.max;
+        } else if (this.text && typeof saved.text === 'string') {
+            this.text.value = saved.text;
+        }
+    }
+
     get filter() {
         const { name } = this.summary;
         if (this.boxes) return { name, values: this.boxes.filter((box) => box.checked).map((box) => box.value) };
@@ -142,14 +166,22 @@ class FilterRow {
     }
 }
 
-/** Search field with a list of attributes; picking one (click or Enter) adds a filter on it. */
-class FilterPicker {
-    constructor(input, list, onPick) {
+/**
+ * Search field with a list of attributes; picking one (click or Enter) calls onPick with its name.
+ * By default the field clears after a pick ("+ Add filter"). With `selectable` it works as a searchable
+ * select: it shows the picked attribute and lists all attributes again when focused ("Colour by").
+ * `blank` is the label of an extra '' entry listed first (e.g. "One colour").
+ */
+class AttributePicker {
+    constructor(input, list, onPick, { selectable = false, blank = null } = {}) {
         this.input = input;
         this.list = list;
         this.onPick = onPick;
+        this.selectable = selectable;
+        this.blank = blank;
         this.names = [];
         this.taken = new Set();
+        this.selected = '';
         this.active = -1;
 
         input.addEventListener('focus', () => this.open());
@@ -172,11 +204,32 @@ class FilterPicker {
         if (!this.list.hidden) this.render();
     }
 
+    /** Shows `name` as the chosen attribute (selectable pickers only), without calling onPick. */
+    select(name) {
+        this.selected = name;
+        if (this.list.hidden) this.showSelected();
+    }
+
+    label(name) {
+        return name === '' ? this.blank : name;
+    }
+
+    showSelected() {
+        if (!this.selectable) return;
+        this.input.value = this.label(this.selected) ?? '';
+        this.input.placeholder = '';
+    }
+
     get options() {
         return [...this.list.querySelectorAll('[data-name]')];
     }
 
     open() {
+        if (this.list.hidden && this.selectable) {
+            // Start from the whole list; the chosen attribute stays visible as the placeholder.
+            this.input.placeholder = this.label(this.selected) ?? '';
+            this.input.value = '';
+        }
         this.render();
         this.list.hidden = false;
         this.input.setAttribute('aria-expanded', 'true');
@@ -185,19 +238,28 @@ class FilterPicker {
     close() {
         this.list.hidden = true;
         this.input.setAttribute('aria-expanded', 'false');
+        this.input.removeAttribute('aria-activedescendant');
         this.active = -1;
+        this.showSelected();
     }
 
     render() {
         const query = this.input.value.trim().toLowerCase();
-        const matches = this.names.filter((name) => !this.taken.has(name) && name.toLowerCase().includes(query));
-        this.list.replaceChildren(...matches.slice(0, MAX_FILTER_OPTIONS).map((name, index) => {
+        const entries = this.blank === null ? this.names : ['', ...this.names];
+        const matches = entries.filter((name) => !this.taken.has(name) && this.label(name).toLowerCase().includes(query));
+        const shown = matches.slice(0, MAX_FILTER_OPTIONS);
+        this.list.replaceChildren(...shown.map((name, index) => {
             const option = document.createElement('div');
             option.className = 'applied-filter-option';
-            option.id = `applied-filter-option-${index}`;
+            option.id = `${this.list.id}-${index}`;
             option.role = 'option';
             option.dataset.name = name;
-            option.textContent = name;
+            option.textContent = this.label(name);
+            if (this.selectable) {
+                const selected = name === this.selected;
+                option.classList.toggle('is-selected', selected);
+                option.setAttribute('aria-selected', String(selected));
+            }
             return option;
         }));
         if (!matches.length) {
@@ -211,7 +273,10 @@ class FilterPicker {
             more.textContent = `${matches.length - MAX_FILTER_OPTIONS} more: type to narrow down.`;
             this.list.append(more);
         }
-        this.setActive(query && matches.length ? 0 : -1);
+        // Typing highlights the first match; an untouched selectable list highlights the chosen attribute.
+        let active = query && matches.length ? 0 : -1;
+        if (!query && this.selectable) active = shown.indexOf(this.selected);
+        this.setActive(active);
     }
 
     setActive(index) {
@@ -242,16 +307,63 @@ class FilterPicker {
     }
 
     pick(name) {
-        this.input.value = '';
+        if (this.selectable) this.selected = name;
+        else this.input.value = '';
         this.close();
         this.input.blur();
         this.onPick(name);
     }
 }
 
+/** The Applied page's choices in localStorage; reads and writes never throw (storage may be unavailable). */
+class ViewState {
+    constructor() {
+        let state = null;
+        try { state = JSON.parse(localStorage.getItem(VIEW_KEY)); } catch { /* storage unavailable or bad JSON */ }
+        this.state = state && typeof state === 'object' ? state : {};
+        this.state.sessions ??= {};
+        this.state.layers ??= {};
+    }
+
+    get field() { return this.state.field; }
+
+    set field(name) { this.state.field = name; this.save(); }
+
+    session(field) { return this.state.sessions[field]; }
+
+    get layer() { return this.state.layer; }
+
+    /** { color, filters } last used on a layer ('sections' / 'points'), or undefined. */
+    layerView(layer) { return this.state.layers[layer]; }
+
+    update({ field, session, layer, color, filters }) {
+        this.state.field = field;
+        this.state.sessions[field] = session;
+        this.state.layer = layer;
+        this.state.layers[layer] = { color, filters };
+        this.save();
+    }
+
+    save() {
+        try { localStorage.setItem(VIEW_KEY, JSON.stringify(this.state)); } catch { /* storage unavailable */ }
+    }
+}
+
 class AppliedPage {
     constructor() {
         this.root = byId('applied-layout');
+        this.view = new ViewState();
+        // Opened without a field (e.g. from the navigation): go to the field viewed last, if it still exists.
+        const fieldName = this.root.dataset.field;
+        const remembered = this.view.field;
+        if (!new URL(window.location.href).searchParams.has('field') && remembered && remembered !== fieldName
+            && [...byId('applied-field').options].some((option) => option.value === remembered)) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('field', remembered);
+            window.location.replace(url);
+            return;
+        }
+        this.view.field = fieldName;
         this.field = readJSON('field-data');
         this.map = createMap(byId('applied-map'));
         this.drawField();
@@ -276,10 +388,13 @@ class AppliedPage {
         for (const option of this.sessionSelect.options) {
             option.textContent = sessionLabel(option.value) + (option.textContent.includes('(recording)') ? ' (recording)' : '');
         }
-        this.colorSelect = byId('applied-color');
-        this.filterPicker = new FilterPicker(byId('applied-filter-search'), byId('applied-filter-options'), (name) => this.addFilter(name));
+        this.color = '';
+        this.colorPicker = new AttributePicker(byId('applied-color'), byId('applied-color-options'),
+            (name) => this.selectColor(name), { selectable: true, blank: 'One colour' });
+        this.filterPicker = new AttributePicker(byId('applied-filter-search'), byId('applied-filter-options'), (name) => this.addFilter(name));
         /** @type {FilterRow[]} */
         this.filters = [];
+        this.layerChange = 0;
         this.columns = {};
         this.request = 0;
 
@@ -287,9 +402,35 @@ class AppliedPage {
         for (const radio of document.querySelectorAll('input[name="applied-layer"]')) {
             radio.addEventListener('change', () => this.selectLayer());
         }
-        this.colorSelect.addEventListener('change', () => this.selectColor(this.colorSelect.value));
+        this.bindDeleteAll();
 
+        // Restore the remembered recording and layer when they still exist (selectSession falls back otherwise).
+        const session = this.view.session(fieldName);
+        if ([...this.sessionSelect.options].some((option) => option.value === session)) this.sessionSelect.value = session;
+        const layerRadio = byId(`applied-layer-${this.view.layer}`);
+        if (layerRadio) layerRadio.checked = true;
         this.selectSession(true);
+    }
+
+    /** "Delete all recordings" dialog: removes every session of the field, then reloads the page. */
+    bindDeleteAll() {
+        const accept = byId('applied-delete-accept');
+        const download = byId('applied-delete-download');
+        // After "Download first" the delete button becomes the obvious next step.
+        download.addEventListener('click', () => {
+            download.classList.replace('btn-outline-secondary', 'btn-light');
+            accept.focus();
+        });
+        accept.addEventListener('click', () => {
+            const body = new FormData();
+            body.append('field', this.root.dataset.field);
+            withBusy(accept, postForm(accept.dataset.deleteUrl, body))
+                .then(() => window.location.reload())
+                .catch((error) => {
+                    bootstrap.Modal.getInstance(byId('applied-delete-dialog'))?.hide();
+                    showError('Deleting the recordings', error);
+                });
+        });
     }
 
     drawField() {
@@ -353,26 +494,39 @@ class AppliedPage {
     }
 
     async selectLayer(fit = false) {
+        const change = ++this.layerChange;
         byId('applied-download').href = this.url('downloadUrl');
         this.filters = [];
         byId('applied-filters').replaceChildren();
+        let columns;
         try {
-            const { columns } = await this.getJSON('layerUrl');
-            this.columns = columns;
+            ({ columns } = await this.getJSON('layerUrl'));
         } catch (error) {
             showError('Loading the recording', error);
             return;
         }
+        if (change !== this.layerChange) return;  // another session or layer was picked meanwhile
+        this.columns = columns;
         const names = Object.keys(this.columns).sort((a, b) => a.localeCompare(b));
-        this.colorSelect.replaceChildren(new Option('One colour', ''), ...names.map((name) => new Option(name, name)));
+        this.colorPicker.setNames(names);
         this.filterPicker.setNames(names);
 
-        const color = DEFAULT_COLOR[this.layerName];
-        await this.selectColor(color in this.columns ? color : '', { fit });
+        // The colour and filters last used on this layer, as far as this recording has those attributes.
+        const remembered = this.view.layerView(this.layerName);
+        for (const saved of remembered?.filters ?? []) {
+            if (saved?.name in this.columns) await this.addFilter(saved.name, saved);
+            if (change !== this.layerChange) return;
+        }
+        // '' is "One colour"; an attribute this recording lacks falls back to the layer's default.
+        const fallback = DEFAULT_COLOR[this.layerName] in this.columns ? DEFAULT_COLOR[this.layerName] : '';
+        let color = remembered?.color ?? fallback;
+        if (color !== '' && !(color in this.columns)) color = fallback;
+        await this.selectColor(color, { fit });
     }
 
     async selectColor(name, { fit = false } = {}) {
-        this.colorSelect.value = name;
+        this.color = name;
+        this.colorPicker.select(name);
         let summary = null;
         if (name) {
             try {
@@ -386,19 +540,24 @@ class AppliedPage {
         await this.reload({ fit });
     }
 
-    async addFilter(name) {
+    /** Adds a filter row on attribute `name`, set to `saved` (a FilterRow.saved) when restoring it. */
+    async addFilter(name, saved = null) {
         if (!name || this.filters.some((row) => row.summary.name === name)) return;
+        const change = this.layerChange;
         try {
             const summary = await this.getJSON('attributeUrl', { name });
+            if (change !== this.layerChange) return;  // the layer changed while loading
             const row = new FilterRow(summary, () => this.scheduleReload(), () => {
                 this.filters = this.filters.filter((other) => other !== row);
                 row.element.remove();
                 this.updateFilterPicker();
                 this.reload();
             });
+            if (saved) row.restore(saved);
             this.filters.push(row);
             byId('applied-filters').append(row.element);
             this.updateFilterPicker();
+            if (!saved) this.saveView();
         } catch (error) {
             showError('Adding the filter', error);
         }
@@ -414,11 +573,22 @@ class AppliedPage {
         this.reloadTimer = setTimeout(() => this.reload(), RELOAD_DELAY_MS);
     }
 
+    saveView() {
+        this.view.update({
+            field: this.root.dataset.field,
+            session: this.session,
+            layer: this.layerName,
+            color: this.color,
+            filters: this.filters.map((row) => row.saved),
+        });
+    }
+
     async reload({ fit = false } = {}) {
+        this.saveView();  // every change of session, layer, colour or filter ends in a reload
         const request = ++this.request;
         const filters = this.filters.map((row) => row.filter).filter(Boolean);
         try {
-            const response = await get(this.url('featuresUrl', { color: this.colorSelect.value, filters: JSON.stringify(filters) }));
+            const response = await get(this.url('featuresUrl', { color: this.color, filters: JSON.stringify(filters) }));
             const collection = await response.json();
             // A newer request (other session, colour or filter) replaced this one.
             if (request !== this.request) return;

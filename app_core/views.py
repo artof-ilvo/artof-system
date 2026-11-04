@@ -23,6 +23,7 @@ import json
 from copy import deepcopy
 import io
 import zipfile
+import shutil
 from django.http import HttpResponse
 from django.shortcuts import render
 
@@ -531,6 +532,31 @@ def applied_feature(request, field_name, session, layer):
     except ValueError:
         raise applied_layers.AppliedError('Invalid feature id')
     return JsonResponse(applied_layers.feature_properties(field_name, session, layer, fid))
+
+def applied_delete(request):
+    """Removes all as-applied sessions of a field (POST `field`); refused while recording into it."""
+    if request.method != 'POST':
+        return JsonResponse({'message': 'Use POST to delete the recordings'}, status=405)
+    field_name = request.POST.get('field', '')
+    if not field_name or field_name not in get_field_names():
+        return JsonResponse({'message': "Field '%s' does not exist" % field_name}, status=400)
+    # The task-map addon records into the current field; deleting under it would break the running session
+    if field_name == get_current_field_name() and as_applied.is_recording(redis_server):
+        return JsonResponse({'message': 'The robot is recording into this field. Stop the recording first.'},
+                            status=409)
+    folder = as_applied.as_applied_dir(field_name)
+    sessions = as_applied.list_sessions(field_name)
+    try:
+        shutil.rmtree(folder)
+    except FileNotFoundError:
+        pass
+    except OSError as error:
+        # e.g. session folders written as root by the task-map addon container while this app runs as a user
+        left = as_applied.list_sessions(field_name)
+        return JsonResponse({'message': "Could not delete %d of the %d recordings of '%s': %s"
+                                        % (len(left), len(sessions), field_name, error),
+                             'deleted': len(sessions) - len(left)}, status=500)
+    return JsonResponse({'deleted': len(sessions)})
 
 @applied_request
 def applied_download(request, field_name, session, layer):
