@@ -86,7 +86,7 @@ class AppliedEndpointsTest(SimpleTestCase):
     def test_layer_columns(self):
         response = self.get('core:applied_layer', layer='points')
         self.assertEqual(response.json()['count'], 4)
-        self.assertEqual(response.json()['columns'], {'time': 'text', 'speed': 'number', 'busy': 'bool', 'mode': 'text'})
+        self.assertEqual(response.json()['columns'], {'time': 'text', 'lat': 'number', 'lon': 'number', 'speed': 'number', 'busy': 'bool', 'mode': 'text'})
 
     def test_attribute_summary(self):
         self.assertEqual(self.get('core:applied_attribute', layer='points', name='speed').json(),
@@ -107,3 +107,48 @@ class AppliedEndpointsTest(SimpleTestCase):
         self.assertEqual(self.client.get(reverse('core:applied_layer'),
                                          {'field': FIELD, 'session': '../x', 'layer': 'points'}).status_code, 400)
         self.assertEqual(self.get('core:applied_attribute', layer='points', name='nope').status_code, 400)
+
+
+class AppliedDeleteTest(SimpleTestCase):
+    """Deletes the as-applied folder of a field of the ILVO copy."""
+
+    def setUp(self):
+        if paths.ilvo_path.rstrip('/') == '/var/lib/ilvo':
+            raise RuntimeError('Run these tests against a copy of the ILVO directory, see the module docstring')
+        recorder = as_applied.AsAppliedRecorder(FIELD, 'EPSG:32631')
+        recorder.log_point([554300.5, 5647960.0], {'speed': 0.5})
+        recorder.flush()
+        self.session = recorder.session
+
+    def tearDown(self):
+        shutil.rmtree(as_applied.session_dir(FIELD, self.session), ignore_errors=True)
+
+    def post(self, field=FIELD):
+        return self.client.post(reverse('core:applied_delete'), {'field': field})
+
+    @mock.patch.object(views.as_applied, 'is_recording', return_value=False)
+    def test_deletes_all_sessions(self, _):
+        self.assertIn(self.session, as_applied.list_sessions(FIELD))
+        response = self.post()
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(response.json()['deleted'], 1)
+        self.assertEqual(as_applied.list_sessions(FIELD), [])
+
+    @mock.patch.object(views, 'get_current_field_name', return_value=FIELD)
+    @mock.patch.object(views.as_applied, 'is_recording', return_value=True)
+    def test_refused_while_recording_into_field(self, *_):
+        self.assertEqual(self.post().status_code, 409)
+        self.assertIn(self.session, as_applied.list_sessions(FIELD))
+
+    def test_bad_requests(self):
+        self.assertEqual(self.post('no such field').status_code, 400)
+        self.assertEqual(self.client.get(reverse('core:applied_delete'), {'field': FIELD}).status_code, 405)
+        self.assertIn(self.session, as_applied.list_sessions(FIELD))
+
+    @mock.patch.object(views.shutil, 'rmtree', side_effect=PermissionError(13, 'Permission denied'))
+    @mock.patch.object(views.as_applied, 'is_recording', return_value=False)
+    def test_reports_files_it_cannot_delete(self, *_):
+        response = self.post()
+        self.assertEqual(response.status_code, 500)
+        self.assertIn('Permission denied', response.json()['message'])
+        self.assertIn(self.session, as_applied.list_sessions(FIELD))

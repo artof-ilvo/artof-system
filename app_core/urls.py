@@ -21,6 +21,7 @@ urlpatterns = [
     path('applied/features', views.applied_features, name='applied_features'),
     path('applied/feature', views.applied_feature, name='applied_feature'),
     path('applied/download', views.applied_download, name='applied_download'),
+    path('applied/delete', views.applied_delete, name='applied_delete'),
     path('map/edit/traject/operation', views.map_edit_traject_operation, name='map_edit_traject_operation'),
     path('map/edit/polygon/operation', views.map_edit_polygon_operation, name='map_edit_polygon_operation'),
     path('map/edit/traject/rows', views.map_edit_traject_rows, name='map_edit_traject_rows'),

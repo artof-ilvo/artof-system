@@ -1466,7 +1466,7 @@ input[type="number"] {
     gap: .35rem;
 }
 
-/* "+ Add filter" search with its attribute list (FilterPicker in applied-page.js). The list opens in place:
+/* "Colour by" and "+ Add filter" searches with their attribute list (AttributePicker in applied-page.js). The list opens in place:
    the sidebar scrolls itself, so a floating list would be cut off at its bottom. */
 .applied-filter-options {
     margin-top: .25rem;
@@ -1494,6 +1494,10 @@ input[type="number"] {
 
 .applied-filter-option.is-active {
     color: var(--brand-text);
+}
+
+.applied-filter-option.is-selected {
+    font-weight: 600;
 }
 
 .applied-filter-empty {

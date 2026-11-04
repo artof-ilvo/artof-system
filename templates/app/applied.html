@@ -16,11 +16,16 @@
         <div class="card-body">
             <form method="GET" action="{% url 'core:applied' %}" class="mb-3" data-busy>
                 <label class="field-label d-block" for="applied-field">Field</label>
-                <select class="form-select" id="applied-field" name="field" data-autosubmit>
-                    {% for name in field_names %}
-                        <option value="{{ name }}" {% if name == applied_field %}selected{% endif %}>{{ name }}</option>
-                    {% endfor %}
-                </select>
+                <div class="d-flex align-items-center gap-2">
+                    <select class="form-select" id="applied-field" name="field" data-autosubmit>
+                        {% for name in field_names %}
+                            <option value="{{ name }}" {% if name == applied_field %}selected{% endif %}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if applied_field %}
+                        <a class="btn btn-ghost btn-icon flex-shrink-0" href="{% url 'core:field_download' %}?name={{ applied_field|urlencode }}" download="{{ applied_field }}.zip" title="Download field (zip, incl. all recordings)" aria-label="Download field {{ applied_field }}">{% include "icons/download.html" %}</a>
+                    {% endif %}
+                </div>
             </form>
 
             <div class="form-check form-switch mb-3" id="applied-traject-toggle" hidden>
@@ -50,7 +55,11 @@
                 </div>
 
                 <label class="field-label d-block mt-3" for="applied-color">Colour by</label>
-                <select class="form-select" id="applied-color"></select>
+                <div class="applied-filter-picker">
+                    <input type="text" class="form-select" id="applied-color" placeholder="Search attributes…" autocomplete="off" spellcheck="false"
+                           role="combobox" aria-autocomplete="list" aria-controls="applied-color-options" aria-expanded="false">
+                    <div class="applied-filter-options" id="applied-color-options" role="listbox" hidden></div>
+                </div>
                 <div class="applied-legend mt-2" id="applied-legend"></div>
 
                 <div class="d-flex align-items-center justify-content-between mt-3">
@@ -63,6 +72,11 @@
                            autocomplete="off" role="combobox" aria-label="Add a filter" aria-autocomplete="list" aria-controls="applied-filter-options" aria-expanded="false">
                     <div class="applied-filter-options" id="applied-filter-options" role="listbox" hidden></div>
                 </div>
+
+                <button type="button" class="btn btn-outline-danger btn-sm w-100 mt-4 d-inline-flex align-items-center justify-content-center gap-2"
+                        data-bs-toggle="modal" data-bs-target="#applied-delete-dialog">
+                    {% include "icons/trash.html" %} Delete all recordings
+                </button>
             {% else %}
                 <p class="mode-info m-0">No as-applied recordings for this field yet. Start one with the record button on the map page.</p>
             {% endif %}
@@ -73,6 +87,37 @@
         <div id="applied-map" class="map"></div>
     </div>
 </div>
+
+{% if sessions %}
+<div class="modal fade" id="applied-delete-dialog" tabindex="-1" aria-labelledby="applied-delete-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body p-4">
+                <div class="d-flex align-items-center gap-2 mb-2 text-danger">
+                    {% include "icons/exclamation-triangle-fill.html" %}
+                    <h2 class="h6 m-0" id="applied-delete-title">Delete all recordings of {{ applied_field }}?</h2>
+                </div>
+                <p class="text-body-secondary">
+                    This permanently deletes all {{ sessions|length }} as-applied recording{{ sessions|length|pluralize }} of this field.
+                    <strong>They cannot be recovered.</strong>
+                </p>
+                <p class="text-body-secondary m-0">
+                    Do you want to download the field first to keep the recordings locally? The download is a zip of the whole field, recordings included.
+                </p>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-light me-auto" data-bs-dismiss="modal">Cancel</button>
+                <a class="btn btn-outline-secondary d-inline-flex align-items-center gap-2" id="applied-delete-download"
+                   href="{% url 'core:field_download' %}?name={{ applied_field|urlencode }}" download="{{ applied_field }}.zip">
+                    {% include "icons/download.html" %} Download first
+                </a>
+                <button type="button" class="btn btn-danger" id="applied-delete-accept"
+                        data-delete-url="{% url 'core:applied_delete' %}">Delete all</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 {{ field_data|json_script:"field-data" }}
 <script type="module" src="{% static 'js/pages/applied-page.js' %}"></script>
